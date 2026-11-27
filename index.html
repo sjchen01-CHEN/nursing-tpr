@@ -250,10 +250,10 @@
                         </button>
                     </div>
 
-                    <!-- 實體掃描槍掃病人手圈與 5 位預設病人快選 -->
+                    <!-- 實體掃描槍掃病人手圈與 6 位預設病人快選 -->
                     <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                         <div class="flex flex-wrap items-center justify-between gap-2">
-                            <p class="text-xs font-bold text-slate-700">🏥 預設 5 位固定病人檔案 (點擊卡片或掃描該病人 QR Code 帶入)：</p>
+                            <p class="text-xs font-bold text-slate-700">🏥 預設 6 位固定病人檔案 (點擊卡片或掃描該病人 QR Code 帶入)：</p>
                             <button onclick="openAdminModal('patients')" class="text-xs text-sky-700 underline font-bold">修改病人資料 / 檢視 QR Code</button>
                         </div>
                         <div class="flex gap-2">
@@ -262,7 +262,7 @@
                                 帶入病歷
                             </button>
                         </div>
-                        <!-- 動態渲染 5 位病人卡片 -->
+                        <!-- 動態渲染 6 位病人卡片 -->
                         <div id="patient-quick-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"></div>
                     </div>
                 </div>
@@ -612,7 +612,7 @@
                     2️⃣ 禮物設定 & 領取紀錄修正
                 </button>
                 <button id="admin-tab-patients" onclick="switchAdminTab('patients')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
-                    3️⃣ 5位病人 & QR Code
+                    3️⃣ 6位病人 & QR Code
                 </button>
                 <button id="admin-tab-wheel" onclick="switchAdminTab('wheel')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
                     4️⃣ 活動名稱 & 輪盤設定
@@ -717,11 +717,11 @@ N114003, 林佳蓉"></textarea>
                     </div>
                 </div>
 
-                <!-- 分頁 3: 5位病人建檔 & QR Code 產生器 -->
+                <!-- 分頁 3: 6位病人建檔 & QR Code 產生器 -->
                 <div id="admin-panel-patients" class="hidden space-y-4">
                     <div class="bg-emerald-50 border-l-4 border-emerald-500 p-3.5 rounded-r-lg flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <h4 class="font-bold text-emerald-900">🏥 5 位固定病人建檔 & 手圈 QR Code 產生器</h4>
+                            <h4 class="font-bold text-emerald-900">🏥 6 位固定病人建檔 & 手圈 QR Code 產生器</h4>
                             <p class="text-xs text-slate-600 mt-0.5">修改病歷資料後按右上角「儲存並更新 QR Code」，即可列印或截圖右側 QR Code 供 iPad 掃描帶入病歷。</p>
                         </div>
                         <button onclick="saveAllPatients()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg shadow text-xs">
@@ -983,14 +983,14 @@ N114003, 林佳蓉"></textarea>
                 { studentId: "N114009", name: "許芷若" },
                 { studentId: "N114010", name: "鄭冠宇" }
             ],
-
-            // 2. 預設 5 位固定病人建檔
+            // 2. 預設 6 位固定病人建檔
             patients: [
                 { id: "73740", bed: "B301床", name: "周傑倫", gender: "男", age: 50, admDate: "115/11/25", doctor: "外科 林X明醫師" },
                 { id: "00002833", bed: "2011床", name: "劉心平", gender: "男", age: 84, admDate: "115/11/18", doctor: "急重症 李O醫師" },
                 { id: "00002834", bed: "2012床", name: "林安", gender: "女", age: 62, admDate: "115/11/19", doctor: "內科 陳X華醫師" },
                 { id: "00002835", bed: "2013床", name: "林小婷", gender: "女", age: 29, admDate: "115/11/20", doctor: "婦產科 王X芬醫師" },
-                { id: "00002836", bed: "2075床", name: "葉OO", gender: "男", age: 71, admDate: "115/11/21", doctor: "骨科 張X豪醫師" }
+                { id: "00002836", bed: "2075床", name: "葉OO", gender: "男", age: 71, admDate: "115/11/21", doctor: "骨科 張X豪醫師" },
+                { id: "00002837", bed: "2076床", name: "陳美玲", gender: "女", age: 45, admDate: "115/11/22", doctor: "內科 吳X宏醫師" }
             ],
 
             // 3. 首頁輪盤項目與指定機率 (94% / 3% / 3%)
@@ -2212,7 +2212,7 @@ N114010, 鄭冠宇`;
                 </div>
             `).join('');
 
-            // 產生對應 5 組 QR Code (使用精簡純英數病歷代碼 PT:病歷號，避免中文字元 UTF-8 位元長度溢位並大幅提升掃描辨識率)
+            // 產生對應 6 組 QR Code (使用精簡純英數病歷代碼 PT:病歷號，避免中文字元 UTF-8 位元長度溢位並大幅提升掃描辨識率)
             setTimeout(() => {
                 window.appState.patients.forEach((pt, idx) => {
                     const box = document.getElementById(`pt-qrcode-box-${idx}`);
@@ -2248,7 +2248,7 @@ N114010, 鄭冠宇`;
             renderAdminPatients();
             renderQuickChipsAndPatients();
             if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
-            showToast('✅ 已儲存 5 位病人建檔資料並更新手圈 QR Code！', '🏥');
+            showToast('✅ 已儲存 6 位病人建檔資料並更新手圈 QR Code！', '🏥');
         }
 
         // 後台分頁 4：首頁活動名稱 & 輪盤項目機率修改

@@ -121,55 +121,41 @@
                         <span class="text-[11px] font-normal opacity-90 mt-0.5">抽取任務</span>
                     </button>
                 </div>
-                <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
-                    <p class="text-xs sm:text-sm text-slate-500">點擊「旋轉輪盤」依設定機率抽取任務，或直接點右側快速進入</p>
-                    <button onclick="openAdminModal('wheel')" class="text-xs text-sky-700 underline font-bold hover:text-sky-900">修改輪盤項目與機率</button>
-                </div>
             </div>
 
-            <!-- 右側：快速作業入口與目前設定說明 -->
-            <div class="lg:col-span-5 space-y-4">
-                <div class="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl border border-sky-100">
-                    <div class="flex items-center justify-between mb-1">
+            <!-- 右側：僅保留標準作業流程 -->
+            <div class="lg:col-span-5">
+                <div class="bg-white/95 backdrop-blur rounded-2xl p-6 sm:p-8 shadow-xl border border-sky-100">
+                    <div class="flex items-center justify-between mb-2">
                         <span class="text-xs font-bold uppercase tracking-wider text-sky-600">Clinical Nursing Practice</span>
                         <span id="live-clock" class="text-xs font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md font-bold"></span>
                     </div>
-                    <h2 class="text-2xl font-extrabold text-slate-800 mt-1">護理臨床技術與闖關系統</h2>
-                    <p class="text-sm text-slate-600 mt-2 leading-relaxed">
-                        標準作業流程：<span class="font-bold text-sky-700">1.旋轉輪盤</span> ➔ <span class="font-bold text-sky-700">2.掃描學生證</span> ➔ <span class="font-bold text-sky-700">3.掃病人手圈</span> ➔ <span class="font-bold text-sky-700">4.輸入生命徵象</span> ➔ <span class="font-bold text-emerald-700">5.領取禮物</span>。
-                    </p>
-
-                    <div class="mt-5 space-y-3">
-                        <!-- 主要功能入口 -->
-                        <button onclick="startNursingWorkflow()" class="w-full text-left p-4 rounded-xl bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-700 active:scale-[0.99] text-white shadow-lg transition flex items-center justify-between group">
-                            <div>
-                                <div class="text-xs bg-white/20 inline-block px-2 py-0.5 rounded font-semibold mb-1">★ 核心作業 (機率 94%)</div>
-                                <div class="font-bold text-base sm:text-lg" id="home-main-task-title">1. 護理技術-量血壓 (掃碼登錄 TPR)</div>
-                                <div class="text-xs text-sky-100 mt-0.5">2.掃學生證 ➔ 3.掃病人手圈 ➔ 4.輸入資料 ➔ 5.領取禮物</div>
-                            </div>
-                            <span class="text-2xl group-hover:translate-x-1 transition">➔</span>
-                        </button>
-
-                        <!-- 輪盤其他獎項預覽 -->
-                        <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 text-xs space-y-1.5">
-                            <div class="font-bold text-amber-900 flex items-center justify-between">
-                                <span>🎡 目前輪盤任務與機率配置：</span>
-                                <button onclick="openAdminModal('wheel')" class="text-sky-700 underline">編輯</button>
-                            </div>
-                            <ul id="home-wheel-summary" class="space-y-1 text-slate-700"></ul>
-                        </div>
-
-                        <!-- 老師後台快速入口 -->
-                        <button onclick="openAdminModal()" class="w-full p-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-[0.99] border border-emerald-200 text-emerald-900 transition flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <span class="text-2xl">⚙️</span>
-                                <div class="text-left">
-                                    <div class="font-bold text-sm">老師後台管理中心</div>
-                                    <div class="text-xs text-emerald-700">匯入學號名單、修正禮物領取紀錄、編輯5位病人 QR Code</div>
-                                </div>
-                            </div>
-                            <span class="text-xs font-bold bg-emerald-200/80 text-emerald-900 px-2.5 py-1 rounded">開啟設定</span>
-                        </button>
+                    <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">護理臨床技術與闖關系統</h2>
+                    
+                    <div class="mt-5 bg-sky-50/80 border border-sky-200 rounded-xl p-4 sm:p-5">
+                        <div class="text-sm font-extrabold text-sky-900 mb-3">📋 標準作業流程：</div>
+                        <ol class="space-y-2.5 text-sm sm:text-base font-bold text-slate-700">
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">1</span>
+                                <span class="text-sky-800">旋轉輪盤（抽取任務）</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">2</span>
+                                <span class="text-sky-800">掃描學生證（或手動輸入學號）</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">3</span>
+                                <span class="text-sky-800">掃病人手圈 QR Code</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">4</span>
+                                <span class="text-sky-800">輸入生命徵象並轉 TPR 圖示</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center shrink-0">5</span>
+                                <span class="text-emerald-800">領取禮物</span>
+                            </li>
+                        </ol>
                     </div>
                 </div>
             </div>

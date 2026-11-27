@@ -127,10 +127,10 @@
             <div class="lg:col-span-5">
                 <div class="bg-white/95 backdrop-blur rounded-2xl p-6 sm:p-8 shadow-xl border border-sky-100">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-sky-600">Clinical Nursing Practice</span>
+                        <span id="home-event-subtitle" class="text-xs font-bold uppercase tracking-wider text-sky-600">Clinical Nursing Practice</span>
                         <span id="live-clock" class="text-xs font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md font-bold"></span>
                     </div>
-                    <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">護理臨床技術與闖關系統</h2>
+                    <h2 id="home-event-title" class="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">護理臨床技術與闖關系統</h2>
                     
                     <div class="mt-5 bg-sky-50/80 border border-sky-200 rounded-xl p-4 sm:p-5">
                         <div class="text-sm font-extrabold text-sky-900 mb-3">📋 標準作業流程：</div>
@@ -615,7 +615,7 @@
                     3️⃣ 5位病人 & QR Code
                 </button>
                 <button id="admin-tab-wheel" onclick="switchAdminTab('wheel')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
-                    4️⃣ 首頁輪盤 & 機率
+                    4️⃣ 活動名稱 & 輪盤設定
                 </button>
                 <button id="admin-tab-gsheet" onclick="switchAdminTab('gsheet')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
                     5️⃣ Google Sheet 串接
@@ -717,26 +717,40 @@ N114003, 林佳蓉"></textarea>
                     </div>
                 </div>
 
-                <!-- 分頁 3: 5位病人建檔 & QR Code -->
+                <!-- 分頁 3: 5位病人建檔 & QR Code 產生器 -->
                 <div id="admin-panel-patients" class="hidden space-y-4">
                     <div class="bg-emerald-50 border-l-4 border-emerald-500 p-3.5 rounded-r-lg flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <h4 class="font-bold text-emerald-900">🏥 5 位固定病人建檔與手圈 QR Code 產生器</h4>
-                            <p class="text-xs text-slate-600 mt-0.5">在此修改床號、姓名、病歷號或醫師，右側會自動產生最新的病人手圈 QR Code（可列印或用另一台設備掃描測試）。</p>
+                            <h4 class="font-bold text-emerald-900">🏥 5 位固定病人建檔 & 手圈 QR Code 產生器</h4>
+                            <p class="text-xs text-slate-600 mt-0.5">修改病歷資料後按右上角「儲存並更新 QR Code」，即可列印或截圖右側 QR Code 供 iPad 掃描帶入病歷。</p>
                         </div>
                         <button onclick="saveAllPatients()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg shadow text-xs">
-                            💾 儲存全部 5 位病人並同步
+                            💾 儲存並更新 QR Code
                         </button>
                     </div>
-
                     <div id="admin-patients-list" class="space-y-3"></div>
                 </div>
 
-                <!-- 分頁 4: 首頁輪盤項目 & 機率設定 -->
+                <!-- 分頁 4: 首頁活動名稱 & 輪盤項目機率設定 -->
                 <div id="admin-panel-wheel" class="hidden space-y-4">
+                    <!-- 活動名稱修改區 -->
+                    <div class="bg-sky-50 border-l-4 border-sky-500 p-3.5 rounded-r-lg space-y-2.5">
+                        <h4 class="font-bold text-sky-900">🏷️ 首頁活動名稱設定（修改後按右下角「套用並更新」即可同步）</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs font-bold text-slate-700 block mb-1">活動主標題（顯示於首頁大字）：</label>
+                                <input type="text" id="edit-event-title" value="護理臨床技術與闖關系統" class="w-full border border-sky-300 rounded-lg px-3 py-2 text-sm font-bold bg-white">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-700 block mb-1">活動副標題 / 單位標語：</label>
+                                <input type="text" id="edit-event-subtitle" value="Clinical Nursing Practice" class="w-full border border-sky-300 rounded-lg px-3 py-2 text-sm font-bold bg-white">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="bg-amber-50 border-l-4 border-amber-500 p-3.5 rounded-r-lg flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <h4 class="font-bold text-amber-900">🎡 首頁輪盤項目名稱與抽中機率調整（每行 10 字元自動換行）</h4>
+                            <h4 class="font-bold text-amber-900">🎡 首頁輪盤項目名稱與抽中機率調整（轉盤上不顯示機率，每行 10 字元自動換行）</h4>
                             <p class="text-xs text-slate-600 mt-0.5">目前總機率：<span id="wheel-prob-total" class="font-bold text-emerald-700">100%</span>（建議設定總和為 100%）。</p>
                         </div>
                         <div class="flex gap-2">
@@ -744,7 +758,7 @@ N114003, 林佳蓉"></textarea>
                                 ➕ 新增項目
                             </button>
                             <button onclick="saveWheelSettings()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2 rounded-lg shadow text-xs">
-                                💾 套用並更新輪盤
+                                💾 套用並更新設定
                             </button>
                         </div>
                     </div>
@@ -822,52 +836,52 @@ N114003, 林佳蓉"></textarea>
                     await signInAnonymously(auth);
                 }
 
-                if (auth.currentUser) {
-                    updateSyncBadge(true, '10人雲端同步中');
-                    // 監聽老師設定檔 (學號名單、禮物設定、5位病人、輪盤設定)
-                    const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'nis_config', 'main');
-                    onSnapshot(configDocRef, (snap) => {
-                        if (snap.exists()) {
-                            const data = snap.data();
-                            if (data.students) window.appState.students = data.students;
-                            if (data.giftConfig) window.appState.giftConfig = data.giftConfig;
-                            if (data.giftClaims) window.appState.giftClaims = { ...window.appState.giftClaims, ...data.giftClaims };
-                            if (data.patients) window.appState.patients = data.patients;
-                            if (data.wheelItems) window.appState.wheelItems = data.wheelItems;
-                            if (data.googleSheetUrl !== undefined) window.appState.googleSheetUrl = data.googleSheetUrl;
-                            window.refreshAllUI();
-                        }
-                    }, (err) => console.warn("同步設定監聽:", err));
+                // 監聽老師設定檔 (學號名單、禮物設定、5位病人、活動名稱與輪盤設定)
+                const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'nis_config', 'main');
+                onSnapshot(configDocRef, (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        if (data.students) window.appState.students = data.students;
+                        if (data.eventTitle) window.appState.eventTitle = data.eventTitle;
+                        if (data.eventSubtitle) window.appState.eventSubtitle = data.eventSubtitle;
+                        if (data.giftConfig) window.appState.giftConfig = data.giftConfig;
+                        if (data.giftClaims) window.appState.giftClaims = { ...window.appState.giftClaims, ...data.giftClaims };
+                        if (data.patients) window.appState.patients = data.patients;
+                        if (data.wheelItems) window.appState.wheelItems = data.wheelItems;
+                        if (data.googleSheetUrl !== undefined) window.appState.googleSheetUrl = data.googleSheetUrl;
+                        window.refreshAllUI();
+                    }
+                }, (err) => console.warn("同步設定監聽:", err));
 
-                    // 監聽各台 iPad 同步的禮物領取紀錄
-                    const giftColRef = collection(db, 'artifacts', appId, 'public', 'data', 'gift_claims');
-                    onSnapshot(giftColRef, (snapshot) => {
-                        snapshot.forEach(d => {
-                            window.appState.giftClaims[d.id] = d.data();
-                        });
-                        if (window.appState.currentStudent) {
-                            window.renderGiftStatusUI();
-                        }
-                        if (!document.getElementById('admin-panel-gifts').classList.contains('hidden')) {
-                            window.renderAdminGiftRecords();
-                        }
-                    }, (err) => console.warn("禮物同步監聽:", err));
+                // 監聽各台 iPad 同步的禮物領取紀錄
+                const giftColRef = collection(db, 'artifacts', appId, 'public', 'data', 'gift_claims');
+                onSnapshot(giftColRef, (snapshot) => {
+                    snapshot.forEach(d => {
+                        window.appState.giftClaims[d.id] = d.data();
+                    });
+                    if (window.appState.currentStudent) {
+                        window.renderGiftStatusUI();
+                    }
+                    const giftPanel = document.getElementById('admin-panel-gifts');
+                    if (giftPanel && !giftPanel.classList.contains('hidden')) {
+                        window.renderAdminGiftRecords();
+                    }
+                }, (err) => console.warn("禮物同步監聽:", err));
 
-                    // 監聽所有 iPad 上傳的 TPR 紀錄
-                    const recordsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'tpr_records');
-                    onSnapshot(recordsColRef, (snapshot) => {
-                        const list = [];
-                        snapshot.forEach(d => list.push({ id: d.id, ...d.data() }));
-                        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                        if (list.length > 0) {
-                            window.vitalRecords = list;
-                            window.renderRecordsTable();
-                            if (window.appState.currentPatient) {
-                                window.drawTprChart();
-                            }
+                // 監聽所有 iPad 上傳的 TPR 紀錄
+                const recordsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'tpr_records');
+                onSnapshot(recordsColRef, (snapshot) => {
+                    const list = [];
+                    snapshot.forEach(d => list.push({ id: d.id, ...d.data() }));
+                    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                    if (list.length > 0) {
+                        window.vitalRecords = list;
+                        window.renderRecordsTable();
+                        if (window.appState.currentPatient) {
+                            window.drawTprChart();
                         }
-                    }, (err) => console.warn("紀錄同步監聽:", err));
-                }
+                    }
+                }, (err) => console.warn("紀錄同步監聽:", err));
             } catch (e) {
                 console.warn("雲端初始化切換為單機模式:", e);
                 updateSyncBadge(false, '本機模式');
@@ -890,6 +904,8 @@ N114003, 林佳蓉"></textarea>
                 const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'nis_config', 'main');
                 await setDoc(configDocRef, {
                     students: window.appState.students,
+                    eventTitle: window.appState.eventTitle,
+                    eventSubtitle: window.appState.eventSubtitle,
                     giftConfig: window.appState.giftConfig,
                     giftClaims: window.appState.giftClaims,
                     patients: window.appState.patients,
@@ -935,6 +951,8 @@ N114003, 林佳蓉"></textarea>
         window.appState = {
             currentStudent: null, // { studentId, name, loginTime }
             currentPatient: null,
+            eventTitle: "護理臨床技術與闖關系統",
+            eventSubtitle: "Clinical Nursing Practice",
             selectedTempSite: "耳溫",
             selectedPulseSite: "橈動脈",
             selectedBpType: "非侵入式",
@@ -1043,29 +1061,18 @@ N114003, 林佳蓉"></textarea>
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const items = window.appState.wheelItems;
-            const totalProb = items.reduce((sum, item) => sum + Number(item.prob || 0), 0) || 100;
+
+            // 同步更新首頁活動主標題與副標題
+            const titleEl = document.getElementById('home-event-title');
+            const subEl = document.getElementById('home-event-subtitle');
+            if (titleEl) titleEl.innerText = window.appState.eventTitle || "護理臨床技術與闖關系統";
+            if (subEl) subEl.innerText = window.appState.eventSubtitle || "Clinical Nursing Practice";
 
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
             const radius = cx - 8;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 更新右側輪盤摘要列表
-            const summaryEl = document.getElementById('home-wheel-summary');
-            if (summaryEl) {
-                summaryEl.innerHTML = items.map(it =>
-                    `<li class="flex justify-between items-center">
-                        <span class="truncate pr-2">• ${it.label}</span>
-                        <span class="font-bold px-1.5 py-0.5 rounded bg-white border text-slate-800 whitespace-nowrap">${it.prob}%</span>
-                    </li>`
-                ).join('');
-            }
-            const coreItem = items.find(i => i.isCore) || items[0];
-            const mainTitleEl = document.getElementById('home-main-task-title');
-            if (mainTitleEl && coreItem) {
-                mainTitleEl.innerText = `1. ${coreItem.label} (掃碼登錄 TPR)`;
-            }
 
             // 視覺上將扇形均分，方便師生清晰閱讀每個選項文字；實際抽取嚴格依照權重機率
             const sliceAngle = (2 * Math.PI) / items.length;
@@ -1084,7 +1091,7 @@ N114003, 林佳蓉"></textarea>
                 ctx.strokeStyle = "#ffffff";
                 ctx.stroke();
 
-                // 繪製文字 (嚴格 1 行 10 字元換行)
+                // 繪製文字 (不顯示機率數字，嚴格 1 行 10 字元換行)
                 ctx.save();
                 ctx.translate(cx, cy);
                 ctx.rotate(startAngle + sliceAngle / 2);
@@ -1092,12 +1099,12 @@ N114003, 林佳蓉"></textarea>
                 ctx.textBaseline = "middle";
                 ctx.fillStyle = "#ffffff";
 
-                const fullText = `${item.label}(${item.prob}%)`;
+                const fullText = `${item.label}`;
                 const lines = wrapTextByCharCount(fullText, 10);
-                const fontSize = lines.length >= 3 ? 13 : 15;
+                const fontSize = lines.length >= 3 ? 14 : 16;
                 ctx.font = `bold ${fontSize}px 'Noto Sans TC', sans-serif`;
 
-                const lineHeight = fontSize + 4;
+                const lineHeight = fontSize + 5;
                 const totalHeight = lines.length * lineHeight;
                 const textRadius = radius * 0.62;
 
@@ -2169,6 +2176,7 @@ N114010, 鄭冠宇`;
         // 後台分頁 3：5 位病人建檔 & 產生手圈 QR Code
         function renderAdminPatients() {
             const container = document.getElementById('admin-patients-list');
+            if (!container) return;
             container.innerHTML = window.appState.patients.map((pt, idx) => `
                 <div class="border border-slate-200 rounded-xl p-3.5 bg-slate-50 flex flex-col md:flex-row items-center justify-between gap-4">
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 flex-grow w-full">
@@ -2240,11 +2248,16 @@ N114010, 鄭冠宇`;
             renderAdminPatients();
             renderQuickChipsAndPatients();
             if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
-            showToast('✅ 已更新 5 位病人資料並重新產生手圈 QR Code！', '🏥');
+            showToast('✅ 已儲存 5 位病人建檔資料並更新手圈 QR Code！', '🏥');
         }
 
-        // 後台分頁 4：首頁輪盤項目 & 機率修改
+        // 後台分頁 4：首頁活動名稱 & 輪盤項目機率修改
         function renderAdminWheel() {
+            const titleInput = document.getElementById('edit-event-title');
+            const subInput = document.getElementById('edit-event-subtitle');
+            if (titleInput) titleInput.value = window.appState.eventTitle || "護理臨床技術與闖關系統";
+            if (subInput) subInput.value = window.appState.eventSubtitle || "Clinical Nursing Practice";
+
             const container = document.getElementById('admin-wheel-list');
             container.innerHTML = window.appState.wheelItems.map((it, idx) => `
                 <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -2287,6 +2300,11 @@ N114010, 鄭冠宇`;
         }
 
         function saveWheelSettings() {
+            const newTitle = document.getElementById('edit-event-title')?.value.trim();
+            const newSub = document.getElementById('edit-event-subtitle')?.value.trim();
+            if (newTitle) window.appState.eventTitle = newTitle;
+            if (newSub !== undefined) window.appState.eventSubtitle = newSub;
+
             window.appState.wheelItems = window.appState.wheelItems.map((it, idx) => ({
                 color: document.getElementById(`wheel-color-${idx}`).value,
                 label: document.getElementById(`wheel-label-${idx}`).value.trim() || it.label,
@@ -2295,7 +2313,7 @@ N114010, 鄭冠宇`;
             }));
             drawRouletteWheel();
             if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
-            showToast('✅ 已套用最新輪盤名稱與機率！', '🎡');
+            showToast('✅ 已套用最新活動名稱與輪盤設定！', '🎡');
         }
 
         // 後台分頁 5：Google Sheet Webhook 寫入

@@ -1,0 +1,2340 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智慧護理臨床教學與 TPR 模擬系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 條碼與 QR Code 掃描庫 (支援 1D 條碼與 2D/3D QR Code) -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- QR Code 產生器庫 (供後台產生5位病人手圈 QR Code) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f1f5f9;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* 輪盤指針動畫 */
+        .wheel-pointer {
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+        }
+        /* 擬真 NIS 系統配色 */
+        .nis-header-bar {
+            background: linear-gradient(180deg, #3b6ea5 0%, #244b7a 100%);
+        }
+        .nis-sub-bar {
+            background-color: #f8d7da;
+            border-bottom: 1px solid #f5c6cb;
+        }
+        .nis-btn-default {
+            background: linear-gradient(180deg, #fdfbf7 0%, #efe9dc 100%);
+            border: 1px solid #b5afa2;
+            color: #333;
+            transition: all 0.1s;
+        }
+        .nis-btn-default:active {
+            transform: scale(0.97);
+        }
+        .nis-btn-active {
+            background: linear-gradient(180deg, #84f516 0%, #5ec700 100%);
+            border: 1px solid #3f8a00;
+            color: #000;
+            font-weight: 700;
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.6);
+        }
+        .nis-input-yellow {
+            background-color: #ffff00;
+            border: 2px solid #2563eb;
+            font-weight: 700;
+            color: #000;
+        }
+        /* 自訂捲軸 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-800 select-none">
+
+    <!-- 頂部系統狀態列 (顯示登入時間、雲端同步與老師後台) -->
+    <header class="bg-slate-900 text-white px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-md z-30">
+        <div class="flex items-center gap-2">
+            <span class="bg-sky-500 text-white text-xs font-bold px-2 py-1 rounded">NIS 教學測試版</span>
+            <h1 class="font-bold text-sm sm:text-base tracking-wide">臨床護理資訊與生命徵象模擬系統</h1>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+            <!-- 即時登入時間與學生狀態 -->
+            <div id="user-badge" class="bg-slate-800 border border-slate-700 px-3 py-1 rounded-full flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400" id="status-dot"></span>
+                <span id="header-student-info">尚未登入學生證</span>
+            </div>
+            <!-- 多人同步連線狀態 -->
+            <div id="sync-badge" class="bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-xs">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" id="sync-dot"></span>
+                <span id="sync-text" class="text-emerald-300 font-medium">多人同步就緒</span>
+            </div>
+            <!-- 老師後台設定按鈕 -->
+            <button onclick="openAdminModal()" class="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold px-3 py-1.5 rounded-lg shadow transition flex items-center gap-1">
+                <span>⚙️ 老師後台設定 (學號/禮物/病人QR)</span>
+            </button>
+            <button onclick="switchView('home')" class="bg-slate-700 hover:bg-slate-600 active:scale-95 text-white px-3 py-1.5 rounded-lg shadow transition">
+                🏠 回首頁輪盤
+            </button>
+        </div>
+    </header>
+
+    <!-- 全域提示訊息 Toast -->
+    <div id="toast-box" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden transition-all duration-300 max-w-[92vw]">
+        <div class="bg-slate-800 text-white px-5 py-3 rounded-xl shadow-2xl border border-slate-600 flex items-center gap-3 text-sm font-medium">
+            <span id="toast-icon" class="text-lg">✅</span>
+            <span id="toast-msg">訊息內容</span>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         畫面一：首頁輪盤導覽 (支援自訂項目名稱與 94% / 3% / 3% 權重)
+         ===================================================================== -->
+    <section id="view-home" class="flex-grow flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-sky-50 via-white to-indigo-50">
+        <div class="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
+            
+            <!-- 左側：互動功能輪盤 -->
+            <div class="lg:col-span-7 flex flex-col items-center justify-center relative">
+                <div class="relative w-[330px] h-[330px] sm:w-[430px] sm:h-[430px] flex items-center justify-center">
+                    <!-- 輪盤上方紅色指針 -->
+                    <div class="absolute -top-3 z-20 wheel-pointer">
+                        <svg width="38" height="46" viewBox="0 0 36 44">
+                            <polygon points="18,44 0,0 36,0" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <!-- 輪盤畫布 -->
+                    <canvas id="roulette-canvas" width="430" height="430" class="w-full h-full rounded-full shadow-2xl border-8 border-white bg-white"></canvas>
+                    <!-- 中央啟動按鈕 -->
+                    <button id="spin-btn" onclick="spinWheel()" class="absolute z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-b from-sky-500 to-blue-700 text-white font-extrabold text-sm sm:text-base shadow-xl border-4 border-white hover:scale-105 active:scale-95 transition flex flex-col items-center justify-center leading-tight">
+                        <span>旋轉輪盤</span>
+                        <span class="text-[11px] font-normal opacity-90 mt-0.5">抽取任務</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 右側：僅保留標準作業流程 -->
+            <div class="lg:col-span-5">
+                <div class="bg-white/95 backdrop-blur rounded-2xl p-6 sm:p-8 shadow-xl border border-sky-100">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-sky-600">Clinical Nursing Practice</span>
+                        <span id="live-clock" class="text-xs font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md font-bold"></span>
+                    </div>
+                    <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">護理臨床技術與闖關系統</h2>
+                    
+                    <div class="mt-5 bg-sky-50/80 border border-sky-200 rounded-xl p-4 sm:p-5">
+                        <div class="text-sm font-extrabold text-sky-900 mb-3">📋 標準作業流程：</div>
+                        <ol class="space-y-2.5 text-sm sm:text-base font-bold text-slate-700">
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">1</span>
+                                <span class="text-sky-800">旋轉輪盤（抽取任務）</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">2</span>
+                                <span class="text-sky-800">掃描學生證（或手動輸入學號）</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">3</span>
+                                <span class="text-sky-800">掃病人手圈 QR Code</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-sky-600 text-white text-xs flex items-center justify-center shrink-0">4</span>
+                                <span class="text-sky-800">輸入生命徵象並轉 TPR 圖示</span>
+                            </li>
+                            <li class="flex items-center gap-2.5">
+                                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center shrink-0">5</span>
+                                <span class="text-emerald-800">領取禮物</span>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =====================================================================
+         畫面二：雙階段掃描驗證區 (2.掃描學生證 -> 3.掃描病人手圈 QR)
+         ===================================================================== -->
+    <section id="view-scanner" class="hidden flex-grow flex flex-col items-center justify-center p-4 bg-slate-100">
+        <div class="max-w-2xl w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+            <!-- 步驟指示器 -->
+            <div class="bg-slate-100 px-4 sm:px-6 py-4 border-b flex items-center justify-between gap-1 text-xs sm:text-sm">
+                <div class="flex items-center gap-1.5">
+                    <span id="step1-badge" class="w-7 h-7 rounded-full bg-sky-600 text-white font-bold flex items-center justify-center">2</span>
+                    <span id="step1-text" class="font-bold text-sky-900">掃學生證</span>
+                </div>
+                <div class="h-0.5 w-4 sm:w-6 bg-slate-300"></div>
+                <div class="flex items-center gap-1.5">
+                    <span id="step2-badge" class="w-7 h-7 rounded-full bg-slate-300 text-slate-600 font-bold flex items-center justify-center">3</span>
+                    <span id="step2-text" class="font-medium text-slate-500">掃病人手圈</span>
+                </div>
+                <div class="h-0.5 w-4 sm:w-6 bg-slate-300"></div>
+                <div class="flex items-center gap-1.5 opacity-60">
+                    <span class="w-7 h-7 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center">4</span>
+                    <span class="font-medium text-slate-500">輸入資料</span>
+                </div>
+                <div class="h-0.5 w-4 sm:w-6 bg-slate-300"></div>
+                <div class="flex items-center gap-1.5 opacity-60">
+                    <span class="w-7 h-7 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center">5</span>
+                    <span class="font-medium text-slate-500">領取禮物</span>
+                </div>
+            </div>
+
+            <div class="p-5 sm:p-6">
+                <!-- 階段 2 內容：掃描或手動登入學號 -->
+                <div id="scanner-step-1" class="space-y-4">
+                    <div class="bg-blue-50 border-l-4 border-sky-500 p-4 rounded-r-lg flex flex-wrap justify-between items-center gap-2">
+                        <div>
+                            <h3 class="font-bold text-sky-900 text-base sm:text-lg">第 2 步：護理生掃描學生證（或手動輸入學號）</h3>
+                            <p class="text-xs sm:text-sm text-slate-600 mt-1">條碼機掃描後會直接帶入學號並記錄登入時間至 Google Sheet，接著進入掃描病人手圈。</p>
+                        </div>
+                        <button onclick="openAdminModal('students')" class="text-xs bg-white border border-sky-300 text-sky-700 font-bold px-3 py-1.5 rounded-lg shadow-sm hover:bg-sky-50">
+                            📥 匯入/查看學生名單
+                        </button>
+                    </div>
+
+                    <!-- 相機掃描區塊 (支援 iPad 前後鏡頭) -->
+                    <div class="bg-slate-900 rounded-xl overflow-hidden relative min-h-[200px] flex flex-col items-center justify-center text-white p-2">
+                        <div id="qr-reader-student" class="w-full max-w-md"></div>
+                        <button id="btn-start-cam-1" onclick="startCamera('student')" class="my-4 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-bold px-6 py-3 rounded-xl shadow-lg text-base">
+                            📷 開啟 iPad / 手機相機掃描學生證條碼
+                        </button>
+                    </div>
+
+                    <!-- 條碼機掃描與手動輸入學號區 -->
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                        <p class="text-xs font-bold text-amber-900">⌨️ 條碼機掃描區 / 手動登入學號 (請確保切換為「英文輸入法」，刷完或輸入學號按確認即可登入)：</p>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" id="manual-student-code" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){ event.preventDefault(); handleStudentScanSuccess(this.value); }" placeholder="請刷學生證或手動輸入學號 (例如：N114001)" class="flex-grow border border-slate-300 rounded-lg px-3 py-2.5 text-base font-bold focus:outline-none focus:border-sky-500 bg-white">
+                            <button onclick="handleStudentScanSuccess(document.getElementById('manual-student-code').value)" class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold px-5 py-2.5 rounded-lg text-sm whitespace-nowrap shadow">
+                                確認登入學號
+                            </button>
+                        </div>
+                        <!-- 快速測試標籤 -->
+                        <div id="quick-student-chips" class="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span class="text-xs text-slate-500">測試學號快選：</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 階段 3 內容：掃描病人手圈 QR Code -->
+                <div id="scanner-step-2" class="hidden space-y-4">
+                    <div class="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded-r-lg">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="font-bold text-emerald-900 text-base sm:text-lg">第 3 步：掃描病人手圈 QR Code</h3>
+                            <div class="flex items-center gap-2">
+                                <span id="login-timestamp-badge" class="text-xs bg-emerald-200/80 text-emerald-900 font-bold px-2.5 py-1 rounded-full"></span>
+                                <button onclick="startNursingWorkflow()" class="text-xs bg-white border border-slate-300 text-slate-700 font-bold px-2.5 py-1 rounded-lg hover:bg-slate-100">🔄 切換學號</button>
+                            </div>
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-600 mt-1">
+                            目前登入護理生：<span id="confirmed-student-name" class="font-bold text-sky-800 text-base"></span> ➔ 請掃描病人手圈帶入病歷資料，完成輸入後即可領取禮物。
+                        </p>
+                    </div>
+
+                    <!-- 相機掃描區塊 -->
+                    <div class="bg-slate-900 rounded-xl overflow-hidden relative min-h-[200px] flex flex-col items-center justify-center text-white p-2">
+                        <div id="qr-reader-patient" class="w-full max-w-md"></div>
+                        <button id="btn-start-cam-2" onclick="startCamera('patient')" class="my-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold px-6 py-3 rounded-xl shadow-lg text-base">
+                            📷 開啟 iPad / 手機相機掃描病人手圈 QR Code
+                        </button>
+                    </div>
+
+                    <!-- 實體掃描槍掃病人手圈與 5 位預設病人快選 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <p class="text-xs font-bold text-slate-700">🏥 預設 5 位固定病人檔案 (點擊卡片或掃描該病人 QR Code 帶入)：</p>
+                            <button onclick="openAdminModal('patients')" class="text-xs text-sky-700 underline font-bold">修改病人資料 / 檢視 QR Code</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="manual-patient-code" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){ event.preventDefault(); handlePatientScanSuccess(this.value); }" placeholder="實體掃描槍刷病人手圈 QR Code 區..." class="flex-grow border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+                            <button onclick="handlePatientScanSuccess(document.getElementById('manual-patient-code').value)" class="bg-slate-700 text-white font-bold px-4 py-2 rounded-lg text-xs">
+                                帶入病歷
+                            </button>
+                        </div>
+                        <!-- 動態渲染 5 位病人卡片 -->
+                        <div id="patient-quick-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =====================================================================
+         畫面三：擬真 NIS 系統 (Vital Sign 輸入視窗 + TPR Curve 自動繪圖)
+         ===================================================================== -->
+    <section id="view-nis" class="hidden flex-grow flex flex-col bg-[#e9edf2]">
+        <!-- NIS 系統頂部導覽分頁 -->
+        <div class="nis-header-bar text-white px-3 pt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-1 overflow-x-auto">
+                <span class="font-bold mr-2 text-amber-200 whitespace-nowrap">杏翔護理資訊系統 [模擬教學版]</span>
+                <button onclick="switchNisTab('vitalsign')" id="tab-btn-vitalsign" class="px-4 py-2 rounded-t-md font-bold bg-[#f8d7da] text-slate-900 shadow whitespace-nowrap">
+                    4️⃣ Vital Sign 輸入
+                </button>
+                <button onclick="switchNisTab('tpr')" id="tab-btn-tpr" class="px-4 py-2 rounded-t-md font-bold bg-slate-700/70 text-white hover:bg-slate-600 whitespace-nowrap">
+                    📈 TPR CURVE 趨勢圖表
+                </button>
+                <button onclick="switchNisTab('gift')" id="tab-btn-gift" class="px-4 py-2 rounded-t-md font-bold bg-amber-500/90 text-slate-950 hover:bg-amber-400 whitespace-nowrap">
+                    5️⃣ 領取禮物
+                </button>
+                <button onclick="switchNisTab('records')" id="tab-btn-records" class="px-4 py-2 rounded-t-md font-bold bg-slate-700/70 text-white hover:bg-slate-600 whitespace-nowrap">
+                    ☁️ 雲端同步紀錄明細 (<span id="record-count">0</span>)
+                </button>
+            </div>
+            <button onclick="switchView('scanner')" class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold px-3 py-1 rounded mb-1 text-xs">
+                🔄 重新掃描學生證 / 病人手圈
+            </button>
+        </div>
+
+        <!-- 病人基本資料橫幅 -->
+        <div class="nis-sub-bar px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm font-bold text-slate-800 shadow-sm">
+            <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+                <span class="bg-white px-2.5 py-0.5 rounded border border-rose-300 text-blue-800" id="nis-pt-id">病歷號：73740</span>
+                <span class="text-base sm:text-lg text-red-700" id="nis-pt-bed-name">B301床 周傑倫</span>
+                <span id="nis-pt-info">男, 50歲 | 住院日：115/11/25 | 外科 林X明醫師</span>
+            </div>
+            <div class="text-xs text-slate-700 bg-white/80 px-2.5 py-1 rounded border border-rose-200">
+                操作護理生：<span id="nis-operator-name" class="text-blue-700 font-extrabold">--</span>
+            </div>
+        </div>
+
+        <!-- 子頁籤 A：Vital Sign 輸入介面 (完全還原截圖 1 設計) -->
+        <div id="nis-panel-vitalsign" class="p-2 sm:p-4 max-w-6xl w-full mx-auto flex-grow">
+            <div class="bg-[#f5f2eb] border-2 border-slate-400 rounded-lg shadow-lg overflow-hidden">
+                <!-- 表單標題列 -->
+                <div class="bg-[#e8e2d5] px-4 py-2.5 border-b border-slate-400 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg sm:text-xl font-extrabold text-red-700" id="form-pt-title">B301床 周傑倫</span>
+                        <span class="text-xs bg-amber-100 border border-amber-300 text-amber-900 px-2 py-0.5 rounded font-bold">預設建檔資料 (不可更動)</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+                        <label class="font-bold">測量日期時間</label>
+                        <input type="text" id="vs-date" class="border border-slate-400 bg-white px-2 py-1 w-28 text-center font-mono rounded" value="115/11/27">
+                        <input type="text" id="vs-time" class="border border-slate-400 bg-white px-2 py-1 w-20 text-center font-mono rounded" value="08:16">
+                        <select id="vs-slot" class="border border-slate-400 bg-sky-50 font-bold text-sky-900 px-2 py-1 rounded">
+                            <option value="04">04:00 時段</option>
+                            <option value="08" selected>08:00 時段</option>
+                            <option value="12">12:00 時段</option>
+                            <option value="16">16:00 時段</option>
+                            <option value="20">20:00 時段</option>
+                            <option value="24">24:00 時段</option>
+                        </select>
+                        <span class="font-bold ml-1">T.P.R. Sheet</span>
+                        <span class="bg-[#6ce600] border border-green-700 px-3 py-0.5 font-bold rounded">是</span>
+                    </div>
+                </div>
+
+                <!-- 表格主體 -->
+                <div class="divide-y divide-slate-400 text-sm">
+                    <!-- 表頭 -->
+                    <div class="grid grid-cols-12 bg-[#dfd8c8] font-bold text-center py-2 border-b border-slate-400">
+                        <div class="col-span-3 sm:col-span-2">項目</div>
+                        <div class="col-span-9 sm:col-span-5 border-l border-slate-400">測量部位</div>
+                        <div class="col-span-12 sm:col-span-5 border-t sm:border-t-0 sm:border-l border-slate-400 mt-1 sm:mt-0 pt-1 sm:pt-0">測量值</div>
+                    </div>
+
+                    <!-- 1. 體溫 Temperature -->
+                    <div class="grid grid-cols-12 items-center p-2.5 bg-[#f7f4ed]">
+                        <div class="col-span-3 sm:col-span-2 font-bold pl-2">
+                            <div class="text-base">體溫</div>
+                            <div class="text-xs text-slate-500 font-normal">Temperature</div>
+                        </div>
+                        <div class="col-span-9 sm:col-span-5 flex flex-wrap gap-2 px-2">
+                            <button type="button" onclick="selectSite('temp', '耳溫', this)" class="temp-site-btn nis-btn-active px-4 py-2.5 rounded text-sm">耳溫</button>
+                            <button type="button" onclick="selectSite('temp', '額溫', this)" class="temp-site-btn nis-btn-default px-4 py-2.5 rounded text-sm">額溫</button>
+                            <button type="button" onclick="selectSite('temp', '口溫', this)" class="temp-site-btn nis-btn-default px-4 py-2.5 rounded text-sm">口溫</button>
+                            <button type="button" onclick="selectSite('temp', '腋溫', this)" class="temp-site-btn nis-btn-default px-4 py-2.5 rounded text-sm">腋溫</button>
+                            <button type="button" onclick="selectSite('temp', '肛溫', this)" class="temp-site-btn nis-btn-default px-4 py-2.5 rounded text-sm">肛溫</button>
+                        </div>
+                        <div class="col-span-12 sm:col-span-5 flex flex-wrap items-center gap-2 px-2 mt-2 sm:mt-0">
+                            <input type="number" step="0.1" id="input-temp" oninput="updateSummaryPreview()" value="36.5" placeholder="36.5" class="nis-input-yellow w-28 px-3 py-2 text-lg text-right rounded">
+                            <span class="font-bold text-base">°C</span>
+                            <button type="button" onclick="setUnmeasured('input-temp')" class="nis-btn-default px-3 py-2 rounded text-xs ml-auto">不需測量</button>
+                        </div>
+                    </div>
+
+                    <!-- 2. 脈搏 Pulse -->
+                    <div class="grid grid-cols-12 items-center p-2.5 bg-[#f7f4ed]">
+                        <div class="col-span-3 sm:col-span-2 font-bold pl-2">
+                            <div class="text-base">脈搏</div>
+                            <div class="text-xs text-slate-500 font-normal">Pulse</div>
+                        </div>
+                        <div class="col-span-9 sm:col-span-5 flex flex-wrap gap-1.5 px-2">
+                            <button type="button" onclick="selectSite('pulse', '橈動脈', this)" class="pulse-site-btn nis-btn-active px-3 py-2 rounded text-xs sm:text-sm">橈動脈</button>
+                            <button type="button" onclick="selectSite('pulse', '心尖脈', this)" class="pulse-site-btn nis-btn-default px-3 py-2 rounded text-xs sm:text-sm">心尖脈</button>
+                            <button type="button" onclick="selectSite('pulse', '頸動脈', this)" class="pulse-site-btn nis-btn-default px-3 py-2 rounded text-xs sm:text-sm">頸動脈</button>
+                            <button type="button" onclick="selectSite('pulse', '足背動脈', this)" class="pulse-site-btn nis-btn-default px-3 py-2 rounded text-xs sm:text-sm">足背動脈</button>
+                            <button type="button" onclick="selectSite('pulse', '生理監測器', this)" class="pulse-site-btn nis-btn-default px-3 py-2 rounded text-xs sm:text-sm">生理監測器</button>
+                        </div>
+                        <div class="col-span-12 sm:col-span-5 flex flex-wrap items-center gap-2 px-2 mt-2 sm:mt-0">
+                            <input type="number" id="input-pulse" oninput="updateSummaryPreview()" value="78" placeholder="80" class="nis-input-yellow w-28 px-3 py-2 text-lg text-right rounded">
+                            <span class="font-bold">次/分鐘</span>
+                            <button type="button" onclick="setUnmeasured('input-pulse')" class="nis-btn-default px-3 py-2 rounded text-xs ml-auto">不需測量</button>
+                        </div>
+                    </div>
+
+                    <!-- 3. 呼吸 Respiration -->
+                    <div class="grid grid-cols-12 items-center p-2.5 bg-[#f7f4ed]">
+                        <div class="col-span-3 sm:col-span-2 font-bold pl-2">
+                            <div class="text-base">呼吸</div>
+                            <div class="text-xs text-slate-500 font-normal">Respiration</div>
+                        </div>
+                        <div class="col-span-9 sm:col-span-5 flex flex-wrap gap-2 px-2">
+                            <span class="text-xs text-slate-600 bg-white px-2.5 py-1.5 rounded border border-slate-300">自動以黑色「✕」標記於 TPR 圖表</span>
+                        </div>
+                        <div class="col-span-12 sm:col-span-5 flex flex-wrap items-center gap-2 px-2 mt-2 sm:mt-0">
+                            <input type="number" id="input-resp" oninput="updateSummaryPreview()" value="18" placeholder="18" class="border border-slate-400 bg-white w-28 px-3 py-2 text-lg font-bold text-right rounded">
+                            <span class="font-bold">次/分鐘</span>
+                            <button type="button" onclick="setUnmeasured('input-resp')" class="nis-btn-default px-3 py-2 rounded text-xs ml-auto">不需測量</button>
+                        </div>
+                    </div>
+
+                    <!-- 4. 血壓 Blood Pressure -->
+                    <div class="grid grid-cols-12 items-center p-2.5 bg-[#f7f4ed]">
+                        <div class="col-span-3 sm:col-span-2 font-bold pl-2">
+                            <div class="text-base">血壓</div>
+                            <div class="text-xs text-slate-500 font-normal">Blood Pressure</div>
+                        </div>
+                        <div class="col-span-9 sm:col-span-5 space-y-2 px-2">
+                            <div class="flex flex-wrap gap-1.5">
+                                <button type="button" onclick="selectSite('bpType', '非侵入式', this)" class="bpType-site-btn nis-btn-active px-3 py-1.5 rounded text-xs">非侵入式</button>
+                                <button type="button" onclick="selectSite('bpType', '侵入式', this)" class="bpType-site-btn nis-btn-default px-3 py-1.5 rounded text-xs">侵入式</button>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button type="button" onclick="selectSite('bpPos', '躺', this)" class="bpPos-site-btn nis-btn-active px-3 py-1.5 rounded text-xs">躺</button>
+                                <button type="button" onclick="selectSite('bpPos', '坐', this)" class="bpPos-site-btn nis-btn-default px-3 py-1.5 rounded text-xs">坐</button>
+                                <button type="button" onclick="selectSite('bpPos', '站', this)" class="bpPos-site-btn nis-btn-default px-3 py-1.5 rounded text-xs">站</button>
+                                <span class="mx-0.5 text-slate-400">|</span>
+                                <button type="button" onclick="selectSite('bpLimb', '左手', this)" class="bpLimb-site-btn nis-btn-active px-3 py-1.5 rounded text-xs">左手</button>
+                                <button type="button" onclick="selectSite('bpLimb', '右手', this)" class="bpLimb-site-btn nis-btn-default px-3 py-1.5 rounded text-xs">右手</button>
+                                <button type="button" onclick="selectSite('bpLimb', '左腳', this)" class="bpLimb-site-btn nis-btn-default px-3 py-1.5 rounded text-xs">左腳</button>
+                                <button type="button" onclick="selectSite('bpLimb', '右腳', this)" class="bpLimb-site-btn nis-btn-default px-3 py-1.5 rounded text-xs">右腳</button>
+                            </div>
+                        </div>
+                        <div class="col-span-12 sm:col-span-5 flex flex-wrap items-center gap-2 px-2 mt-2 sm:mt-0">
+                            <span class="font-bold text-xs">SBP/DBP</span>
+                            <input type="number" id="input-sbp" oninput="updateSummaryPreview()" value="118" placeholder="120" class="border border-slate-400 bg-white w-20 px-2 py-2 text-lg font-bold text-center rounded">
+                            <span class="font-bold text-lg">/</span>
+                            <input type="number" id="input-dbp" oninput="updateSummaryPreview()" value="74" placeholder="80" class="border border-slate-400 bg-white w-20 px-2 py-2 text-lg font-bold text-center rounded">
+                            <span class="font-bold">mmHg</span>
+                        </div>
+                    </div>
+
+                    <!-- 5. 疼痛 Pain -->
+                    <div class="grid grid-cols-12 items-center p-2.5 bg-[#f7f4ed]">
+                        <div class="col-span-3 sm:col-span-2 font-bold pl-2">
+                            <div class="text-base">疼痛</div>
+                            <div class="text-xs text-slate-500 font-normal">Pain</div>
+                        </div>
+                        <div class="col-span-9 sm:col-span-5 flex flex-wrap gap-1.5 px-2">
+                            <button type="button" onclick="selectSite('pain', '不需評估', this)" class="pain-site-btn nis-btn-active px-3 py-2 rounded text-xs">不需評估</button>
+                            <button type="button" onclick="selectSite('pain', '沒有疼痛', this)" class="pain-site-btn nis-btn-default px-3 py-2 rounded text-xs">沒有疼痛</button>
+                            <button type="button" onclick="selectSite('pain', '有疼痛', this)" class="pain-site-btn nis-btn-default px-3 py-2 rounded text-xs">有疼痛</button>
+                        </div>
+                        <div class="col-span-12 sm:col-span-5 flex items-center gap-2 px-2 mt-2 sm:mt-0">
+                            <span class="text-xs font-bold">疼痛分數 (0-10分)：</span>
+                            <input type="number" min="0" max="10" id="input-pain-score" oninput="updateSummaryPreview()" value="0" class="border border-slate-400 bg-white w-16 px-2 py-1.5 text-center font-bold rounded">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 底部即時護理紀錄預覽與功能按鈕列 -->
+                <div class="bg-[#e8e2d5] px-4 py-3 border-t-2 border-slate-400 flex flex-col md:flex-row items-center justify-between gap-3">
+                    <div id="live-summary-text" class="text-sm font-bold text-purple-900 bg-white/80 px-3 py-2 rounded border border-slate-300 w-full md:w-auto flex-grow">
+                        115/11/27 08:16 T:36.5°C(耳溫) P:78次/min(橈動脈) R:18次/min 血壓:118/74mmHg 疼痛:不需評估
+                    </div>
+                    <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                        <button type="button" onclick="saveVitalSigns()" class="bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 active:scale-95 text-white font-extrabold px-6 py-3 rounded-lg shadow-md border border-emerald-900 text-sm sm:text-base whitespace-nowrap">
+                            💾 存檔並轉成 TPR 圖示 [S]
+                        </button>
+                        <button type="button" onclick="switchNisTab('gift')" class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-extrabold px-4 py-3 rounded-lg shadow text-sm whitespace-nowrap">
+                            🎁 前往第 5 步：領取禮物 ➔
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 子頁籤 B：TPR CURVE 臨床網格趨勢圖 (還原截圖 2 & 截圖 3 設計) -->
+        <div id="nis-panel-tpr" class="hidden p-2 sm:p-4 max-w-6xl w-full mx-auto flex-grow">
+            <div class="bg-white border-2 border-slate-400 rounded-lg shadow-lg p-3 sm:p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b">
+                    <div>
+                        <h3 class="font-extrabold text-lg text-blue-900">📊 臨床生命徵象趨勢圖 (TPR CURVE)</h3>
+                        <p class="text-xs text-slate-500">系統已依據臨床護理規範自動轉換測量部位為對應圖示（體溫藍點/空心圓、脈搏紅方塊/三角、呼吸黑色✕）</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="switchNisTab('vitalsign')" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2 rounded-lg text-xs sm:text-sm shadow">
+                            ➕ 繼續新增數據
+                        </button>
+                        <button onclick="switchNisTab('gift')" class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-extrabold px-5 py-2 rounded-lg text-xs sm:text-sm shadow-md">
+                            🎁 完成測量，前往第 5 步：領取禮物 ➔
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 臨床標準圖例說明列 (完全還原截圖 3 底部圖例) -->
+                <div class="bg-slate-50 border border-slate-300 rounded-lg p-2.5 mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-bold">
+                    <span class="text-blue-700 flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-blue-600"></span> 耳溫</span>
+                    <span class="text-blue-700 flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full border-2 border-blue-600"></span> 口溫/腋溫</span>
+                    <span class="text-blue-700 flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full border-2 border-blue-600 bg-blue-200"></span> 額溫/肛溫</span>
+                    <span class="text-slate-300">|</span>
+                    <span class="text-red-600 flex items-center gap-1"><span class="inline-block w-3 h-3 bg-red-600"></span> 橈動脈</span>
+                    <span class="text-red-600 flex items-center gap-1">△ 心尖脈</span>
+                    <span class="text-red-600 flex items-center gap-1">□ 足背/其他</span>
+                    <span class="text-slate-300">|</span>
+                    <span class="text-slate-900 flex items-center gap-1">✕ 呼吸</span>
+                    <span class="text-emerald-700 flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-emerald-600"></span> 疼痛指數</span>
+                </div>
+
+                <!-- TPR Canvas 繪圖區 (支援水平捲動) -->
+                <div class="overflow-x-auto border border-slate-400 rounded bg-white">
+                    <canvas id="tpr-canvas" width="960" height="580" class="mx-auto block"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 子頁籤 D：第 5 步 領取禮物專區 -->
+        <div id="nis-panel-gift" class="hidden p-3 sm:p-6 max-w-3xl w-full mx-auto flex-grow">
+            <div class="bg-white border-2 border-amber-300 rounded-2xl shadow-xl p-5 sm:p-7 space-y-5">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                    <div>
+                        <span class="text-xs font-bold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full">第 5 步：完成任務領取獎勵</span>
+                        <h3 class="font-extrabold text-xl sm:text-2xl text-slate-800 mt-1.5">🎁 護理週闖關禮物領取核對</h3>
+                    </div>
+                    <div class="text-right text-xs text-slate-600 bg-slate-100 px-3 py-2 rounded-xl">
+                        <div>護理生：<span id="gift-page-student" class="font-bold text-sky-800">--</span></div>
+                        <div class="mt-0.5">已完成登錄筆數：<span id="gift-page-record-count" class="font-bold text-emerald-700">0</span> 筆</div>
+                    </div>
+                </div>
+
+                <!-- 禮物領取狀態警示區與領取按鍵 (每人每樣限領一次) -->
+                <div id="gift-claim-panel" class="rounded-xl border-2 p-5 space-y-4 transition-all">
+                    <div class="flex items-start gap-3">
+                        <span id="gift-alert-icon" class="text-3xl">🎁</span>
+                        <div class="flex-grow">
+                            <h4 class="font-bold text-sm text-slate-700">目前禮物領取狀態警示（每人每樣限領一次）：</h4>
+                            <p id="gift-status-alert-text" class="text-lg sm:text-xl font-extrabold mt-1"></p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <button type="button" id="btn-claim-gift-a" onclick="claimStudentGift('A')" class="p-4 rounded-xl font-bold text-base shadow transition flex flex-col items-center justify-center gap-1.5 border-2">
+                            <span id="label-gift-a-btn">🎁 領取 A：【不鏽鋼膠台】</span>
+                            <span id="time-gift-a-btn" class="text-xs font-normal opacity-90">尚未領取 (點擊確認領取)</span>
+                        </button>
+                        <button type="button" id="btn-claim-gift-b" onclick="claimStudentGift('B')" class="p-4 rounded-xl font-bold text-base shadow transition flex flex-col items-center justify-center gap-1.5 border-2">
+                            <span id="label-gift-b-btn">🎁 領取 B：【按摩棒垂】</span>
+                            <span id="time-gift-b-btn" class="text-xs font-normal opacity-90">尚未領取 (點擊確認領取)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-xs text-slate-600">領取完成後，系統已自動將領取時間點寫入 Google Sheet 與老師後台。</p>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="startNursingWorkflow()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow">
+                            🎓 下一位護理生掃碼
+                        </button>
+                        <button type="button" onclick="switchView('home')" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow">
+                            🏠 回到第 1 步：首頁輪盤
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 子頁籤 C：雲端同步紀錄明細 -->
+        <div id="nis-panel-records" class="hidden p-2 sm:p-4 max-w-6xl w-full mx-auto flex-grow">
+            <div class="bg-white border border-slate-300 rounded-xl shadow p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div>
+                        <h3 class="font-bold text-base sm:text-lg text-slate-800">☁️ 護理生生命徵象登錄與雲端同步紀錄</h3>
+                        <p class="text-xs text-slate-500">所有 10 台 iPad 登錄的數據皆會即時同步顯示於此，並自動寫入 Google Sheet。</p>
+                    </div>
+                    <button onclick="openAdminModal('gsheet')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow">
+                        🔗 設定 Google Sheet 同步網址
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs sm:text-sm text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 border-b border-slate-300 text-slate-700">
+                                <th class="p-2.5">時間</th>
+                                <th class="p-2.5">操作護理生</th>
+                                <th class="p-2.5">病人床號/姓名</th>
+                                <th class="p-2.5">體溫 (部位)</th>
+                                <th class="p-2.5">脈搏 (部位)</th>
+                                <th class="p-2.5">呼吸</th>
+                                <th class="p-2.5">血壓 (mmHg)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="records-table-body" class="divide-y divide-slate-200">
+                            <tr>
+                                <td colspan="7" class="p-6 text-center text-slate-400">尚無登錄紀錄，請先完成 Vital Sign 存檔。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =====================================================================
+         老師後台管理 Modal (1.學號名單 / 2.禮物設定與紀錄修正 / 3.5位病人QR / 4.輪盤 / 5.Google Sheet)
+         ===================================================================== -->
+    <div id="admin-modal" class="fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2 sm:p-4">
+        <div class="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">⚙️</span>
+                    <h3 class="font-bold text-base sm:text-lg">老師後台設定中心 (10台 iPad 即時雲端同步)</h3>
+                </div>
+                <button onclick="closeAdminModal()" class="text-slate-300 hover:text-white text-2xl font-bold leading-none px-2">&times;</button>
+            </div>
+
+            <!-- 後台分頁頁籤 -->
+            <div class="bg-slate-100 px-4 pt-2 border-b flex flex-wrap gap-1.5">
+                <button id="admin-tab-students" onclick="switchAdminTab('students')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm bg-white text-sky-800 border-t border-x">
+                    1️⃣ 學生學號名單
+                </button>
+                <button id="admin-tab-gifts" onclick="switchAdminTab('gifts')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
+                    2️⃣ 禮物設定 & 領取紀錄修正
+                </button>
+                <button id="admin-tab-patients" onclick="switchAdminTab('patients')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
+                    3️⃣ 5位病人 & QR Code
+                </button>
+                <button id="admin-tab-wheel" onclick="switchAdminTab('wheel')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
+                    4️⃣ 首頁輪盤 & 機率
+                </button>
+                <button id="admin-tab-gsheet" onclick="switchAdminTab('gsheet')" class="px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60">
+                    5️⃣ Google Sheet 串接
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-5 overflow-y-auto flex-grow space-y-4 text-sm">
+                
+                <!-- 分頁 1: 學生學號名單匯入 (已移除內碼欄位) -->
+                <div id="admin-panel-students" class="space-y-4">
+                    <div class="bg-blue-50 border-l-4 border-sky-500 p-3.5 rounded-r-lg">
+                        <h4 class="font-bold text-sky-900">📌 學生學號名單匯入（無需內碼，條碼機直接掃學號）</h4>
+                        <p class="text-xs text-slate-600 mt-1">
+                            請從 Excel 複製學生資料，或依照格式 <strong>「學號, 姓名」</strong>（或僅貼入「學號」，每行一位學生）貼入下方框內並點擊「批次匯入」。
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="font-bold text-slate-700 block">批次貼上學生學號清單：</label>
+                            <textarea id="bulk-student-input" rows="7" class="w-full border border-slate-300 rounded-xl p-3 font-mono text-xs focus:outline-none focus:border-sky-500" placeholder="範例格式：
+N114001, 王小明
+N114002, 陳雅婷
+N114003, 林佳蓉"></textarea>
+                            <div class="flex gap-2">
+                                <button onclick="importStudentsFromText()" class="flex-grow bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-lg shadow">
+                                    📥 批次匯入 / 更新名單
+                                </button>
+                                <button onclick="fillSampleStudents()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-3 py-2.5 rounded-lg text-xs">
+                                    載入10人測試範本
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="font-bold text-slate-700">目前已建檔學生名單 (<span id="student-count">0</span> 人)：</label>
+                            </div>
+                            <div class="border rounded-xl overflow-hidden max-h-[220px] overflow-y-auto">
+                                <table class="w-full text-xs text-left">
+                                    <thead class="bg-slate-100 border-b sticky top-0">
+                                        <tr>
+                                            <th class="px-3 py-2">學號</th>
+                                            <th class="px-3 py-2">姓名</th>
+                                            <th class="px-3 py-2 text-right">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-student-tbody" class="divide-y"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 分頁 2: 禮物設定 & 學生領取紀錄同步修正 -->
+                <div id="admin-panel-gifts" class="hidden space-y-4">
+                    <div class="bg-amber-50 border-l-4 border-amber-500 p-3.5 rounded-r-lg space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h4 class="font-bold text-amber-900">🎁 禮物項目名稱設定（預設 A：不鏽鋼膠台 / B：按摩棒垂）</h4>
+                                <p class="text-xs text-slate-600 mt-0.5">修改名稱後，所有 iPad 警示語與按鈕會同步更新。</p>
+                            </div>
+                            <button onclick="saveGiftConfig()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-lg shadow text-xs">
+                                💾 儲存禮物名稱設定
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs font-bold text-slate-700 block mb-1">A 品項名稱：</label>
+                                <input type="text" id="edit-gift-name-a" value="不鏽鋼膠台" class="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm font-bold bg-white">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-700 block mb-1">B 品項名稱：</label>
+                                <input type="text" id="edit-gift-name-b" value="按摩棒垂" class="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm font-bold bg-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h4 class="font-bold text-slate-800">📋 學生禮物領取紀錄總表（可直接勾選/取消或修正領取時間，10台 iPad 即時同步）：</h4>
+                            <input type="text" id="filter-gift-student" oninput="renderAdminGiftRecords()" placeholder="🔍 搜尋學號或姓名..." class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-white">
+                        </div>
+                        <div class="border rounded-xl overflow-x-auto max-h-[280px] overflow-y-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-slate-100 border-b sticky top-0">
+                                    <tr>
+                                        <th class="px-3 py-2">學號 / 姓名</th>
+                                        <th class="px-3 py-2" id="th-gift-a">A品項【不鏽鋼膠台】</th>
+                                        <th class="px-3 py-2">A 領取時間點</th>
+                                        <th class="px-3 py-2" id="th-gift-b">B品項【按摩棒垂】</th>
+                                        <th class="px-3 py-2">B 領取時間點</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-gift-tbody" class="divide-y bg-white"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 分頁 3: 5位病人建檔 & QR Code -->
+                <div id="admin-panel-patients" class="hidden space-y-4">
+                    <div class="bg-emerald-50 border-l-4 border-emerald-500 p-3.5 rounded-r-lg flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h4 class="font-bold text-emerald-900">🏥 5 位固定病人建檔與手圈 QR Code 產生器</h4>
+                            <p class="text-xs text-slate-600 mt-0.5">在此修改床號、姓名、病歷號或醫師，右側會自動產生最新的病人手圈 QR Code（可列印或用另一台設備掃描測試）。</p>
+                        </div>
+                        <button onclick="saveAllPatients()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg shadow text-xs">
+                            💾 儲存全部 5 位病人並同步
+                        </button>
+                    </div>
+
+                    <div id="admin-patients-list" class="space-y-3"></div>
+                </div>
+
+                <!-- 分頁 4: 首頁輪盤項目 & 機率設定 -->
+                <div id="admin-panel-wheel" class="hidden space-y-4">
+                    <div class="bg-amber-50 border-l-4 border-amber-500 p-3.5 rounded-r-lg flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h4 class="font-bold text-amber-900">🎡 首頁輪盤項目名稱與抽中機率調整（每行 10 字元自動換行）</h4>
+                            <p class="text-xs text-slate-600 mt-0.5">目前總機率：<span id="wheel-prob-total" class="font-bold text-emerald-700">100%</span>（建議設定總和為 100%）。</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="addWheelItem()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-3 py-2 rounded-lg text-xs">
+                                ➕ 新增項目
+                            </button>
+                            <button onclick="saveWheelSettings()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2 rounded-lg shadow text-xs">
+                                💾 套用並更新輪盤
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="admin-wheel-list" class="space-y-2.5"></div>
+                </div>
+
+                <!-- 分頁 5: Google Sheet 串接教學與網址設定 -->
+                <div id="admin-panel-gsheet" class="hidden space-y-3">
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                        <h4 class="font-bold text-slate-800">🔗 Google Sheet 自動寫入設定 (Apps Script Webhook)</h4>
+                        <p class="text-xs text-slate-600">將部署好的 Google Apps Script 網頁應用程式網址貼在下方，學生登入（含學號與禮物領取狀態/時間點）與存檔 TPR 時即會自動寫入試算表：</p>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" id="gsheet-webhook-url" placeholder="https://script.google.com/macros/s/xxxxx/exec" class="flex-grow border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono">
+                            <button onclick="saveGoogleSheetUrl()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2 rounded-lg text-xs whitespace-nowrap">
+                                儲存網址並測試
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="text-xs space-y-1.5 text-slate-600 bg-blue-50/60 p-3.5 rounded-xl border border-blue-100">
+                        <p class="font-bold text-sky-900">📋 Google Apps Script 接收程式碼範本（含學號登入、禮物領取時間點與 TPR 紀錄）：</p>
+                        <pre class="bg-slate-900 text-emerald-300 p-3 rounded-lg overflow-x-auto text-[11px] leading-relaxed">function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = JSON.parse(e.postData.contents);
+  sheet.appendRow([
+    new Date(),
+    data.action || "",
+    data.studentId || "",
+    data.studentName || "",
+    data.giftStatus || data.summaryStatus || "",
+    data.giftAName + ":" + (data.giftAClaimed || "") + "(" + (data.giftATime || "") + ")",
+    data.giftBName + ":" + (data.giftBClaimed || "") + "(" + (data.giftBTime || "") + ")",
+    data.patientBed ? (data.patientBed + " " + data.patientName) : "",
+    data.temp ? (data.temp + " (" + data.tempSite + ")") : "",
+    data.pulse ? (data.pulse + " (" + data.pulseSite + ")") : "",
+    data.resp || "",
+    data.bp || ""
+  ]);
+  return ContentService.createTextOutput(JSON.stringify({status: "success"})).setMimeType(ContentService.MimeType.JSON);
+}</pre>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         Firebase 多人即時同步模組 (支援 10 台 iPad 同時連線同步設定與紀錄)
+         ===================================================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let db = null;
+        let auth = null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'nursing-nis-demo';
+
+        async function initCloudSync() {
+            try {
+                if (typeof __firebase_config === 'undefined') {
+                    updateSyncBadge(false, '單機測試模式');
+                    return;
+                }
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                if (auth.currentUser) {
+                    updateSyncBadge(true, '10人雲端同步中');
+                    // 監聽老師設定檔 (學號名單、禮物設定、5位病人、輪盤設定)
+                    const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'nis_config', 'main');
+                    onSnapshot(configDocRef, (snap) => {
+                        if (snap.exists()) {
+                            const data = snap.data();
+                            if (data.students) window.appState.students = data.students;
+                            if (data.giftConfig) window.appState.giftConfig = data.giftConfig;
+                            if (data.giftClaims) window.appState.giftClaims = { ...window.appState.giftClaims, ...data.giftClaims };
+                            if (data.patients) window.appState.patients = data.patients;
+                            if (data.wheelItems) window.appState.wheelItems = data.wheelItems;
+                            if (data.googleSheetUrl !== undefined) window.appState.googleSheetUrl = data.googleSheetUrl;
+                            window.refreshAllUI();
+                        }
+                    }, (err) => console.warn("同步設定監聽:", err));
+
+                    // 監聽各台 iPad 同步的禮物領取紀錄
+                    const giftColRef = collection(db, 'artifacts', appId, 'public', 'data', 'gift_claims');
+                    onSnapshot(giftColRef, (snapshot) => {
+                        snapshot.forEach(d => {
+                            window.appState.giftClaims[d.id] = d.data();
+                        });
+                        if (window.appState.currentStudent) {
+                            window.renderGiftStatusUI();
+                        }
+                        if (!document.getElementById('admin-panel-gifts').classList.contains('hidden')) {
+                            window.renderAdminGiftRecords();
+                        }
+                    }, (err) => console.warn("禮物同步監聽:", err));
+
+                    // 監聽所有 iPad 上傳的 TPR 紀錄
+                    const recordsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'tpr_records');
+                    onSnapshot(recordsColRef, (snapshot) => {
+                        const list = [];
+                        snapshot.forEach(d => list.push({ id: d.id, ...d.data() }));
+                        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                        if (list.length > 0) {
+                            window.vitalRecords = list;
+                            window.renderRecordsTable();
+                            if (window.appState.currentPatient) {
+                                window.drawTprChart();
+                            }
+                        }
+                    }, (err) => console.warn("紀錄同步監聽:", err));
+                }
+            } catch (e) {
+                console.warn("雲端初始化切換為單機模式:", e);
+                updateSyncBadge(false, '本機模式');
+            }
+        }
+
+        function updateSyncBadge(online, text) {
+            const dot = document.getElementById('sync-dot');
+            const label = document.getElementById('sync-text');
+            if (dot && label) {
+                dot.className = online ? "w-2 h-2 rounded-full bg-emerald-400 animate-pulse" : "w-2 h-2 rounded-full bg-amber-400";
+                label.className = online ? "text-emerald-300 font-medium" : "text-amber-300 font-medium";
+                label.innerText = text;
+            }
+        }
+
+        window.syncConfigToCloud = async function() {
+            if (!db || !auth?.currentUser) return;
+            try {
+                const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'nis_config', 'main');
+                await setDoc(configDocRef, {
+                    students: window.appState.students,
+                    giftConfig: window.appState.giftConfig,
+                    giftClaims: window.appState.giftClaims,
+                    patients: window.appState.patients,
+                    wheelItems: window.appState.wheelItems,
+                    googleSheetUrl: window.appState.googleSheetUrl,
+                    updatedAt: Date.now()
+                }, { merge: true });
+            } catch (e) {
+                console.error("雲端設定同步失敗:", e);
+            }
+        };
+
+        window.syncGiftClaimToCloud = async function(studentId, claimObj) {
+            if (!db || !auth?.currentUser) return;
+            try {
+                const giftRef = doc(db, 'artifacts', appId, 'public', 'data', 'gift_claims', studentId);
+                await setDoc(giftRef, claimObj, { merge: true });
+            } catch (e) {
+                console.error("雲端禮物領取寫入失敗:", e);
+            }
+        };
+
+        window.syncRecordToCloud = async function(recordObj) {
+            if (!db || !auth?.currentUser) return;
+            try {
+                const recordsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'tpr_records');
+                await addDoc(recordsColRef, { ...recordObj, createdAt: Date.now() });
+            } catch (e) {
+                console.error("雲端紀錄寫入失敗:", e);
+            }
+        };
+
+        initCloudSync();
+    </script>
+
+    <!-- =====================================================================
+         前端核心互動、輪盤權重、雙階掃碼、NIS 表單與 TPR 繪圖邏輯
+         ===================================================================== -->
+    <script>
+        // ==========================================
+        // 1. 系統核心資料狀態 (學號名單、禮物設定、5 位病人、指定機率輪盤)
+        // ==========================================
+        window.appState = {
+            currentStudent: null, // { studentId, name, loginTime }
+            currentPatient: null,
+            selectedTempSite: "耳溫",
+            selectedPulseSite: "橈動脈",
+            selectedBpType: "非侵入式",
+            selectedBpPos: "躺",
+            selectedBpLimb: "左手",
+            selectedPain: "不需評估",
+            googleSheetUrl: "",
+
+            // 禮物設定 (預設 A: 不鏽鋼膠台 / B: 按摩棒垂)
+            giftConfig: {
+                itemA: "不鏽鋼膠台",
+                itemB: "按摩棒垂"
+            },
+
+            // 學生禮物領取紀錄表
+            giftClaims: {},
+
+            // 1. 學生名單 (已移除內碼，直接使用學號比對)
+            students: [
+                { studentId: "N114001", name: "王小明" },
+                { studentId: "N114002", name: "陳雅婷" },
+                { studentId: "N114003", name: "林佳蓉" },
+                { studentId: "N114004", name: "張宇軒" },
+                { studentId: "N114005", name: "李宜蓁" },
+                { studentId: "N114006", name: "黃柏翰" },
+                { studentId: "N114007", name: "吳佩珊" },
+                { studentId: "N114008", name: "蔡宗翰" },
+                { studentId: "N114009", name: "許芷若" },
+                { studentId: "N114010", name: "鄭冠宇" }
+            ],
+
+            // 2. 預設 5 位固定病人建檔
+            patients: [
+                { id: "73740", bed: "B301床", name: "周傑倫", gender: "男", age: 50, admDate: "115/11/25", doctor: "外科 林X明醫師" },
+                { id: "00002833", bed: "2011床", name: "劉心平", gender: "男", age: 84, admDate: "115/11/18", doctor: "急重症 李O醫師" },
+                { id: "00002834", bed: "2012床", name: "林安", gender: "女", age: 62, admDate: "115/11/19", doctor: "內科 陳X華醫師" },
+                { id: "00002835", bed: "2013床", name: "林小婷", gender: "女", age: 29, admDate: "115/11/20", doctor: "婦產科 王X芬醫師" },
+                { id: "00002836", bed: "2075床", name: "葉OO", gender: "男", age: 71, admDate: "115/11/21", doctor: "骨科 張X豪醫師" }
+            ],
+
+            // 3. 首頁輪盤項目與指定機率 (94% / 3% / 3%)
+            wheelItems: [
+                { label: "護理技術-量血壓", prob: 94, color: "#0284c7", isCore: true },
+                { label: "擁抱家人15秒鐘+甜言蜜語5句", prob: 3, color: "#f59e0b", isCore: false },
+                { label: "現場拍照區5張照片", prob: 3, color: "#ec4899", isCore: false }
+            ]
+        };
+
+        window.vitalRecords = [];
+        let html5QrScanner = null;
+        let currentRotation = 0;
+        let isSpinning = false;
+
+        // ==========================================
+        // 2. 輔助工具：Toast 訊息 & 即時時間格式化
+        // ==========================================
+        function showToast(msg, icon = '✅') {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-msg').innerText = msg;
+            document.getElementById('toast-icon').innerText = icon;
+            box.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {
+                box.classList.add('hidden');
+            }, 3800);
+        }
+
+        function getFormattedNow() {
+            const now = new Date();
+            const rocYear = now.getFullYear() - 1911;
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return {
+                dateStr: `${rocYear}/${mm}/${dd}`,
+                timeStr: `${hh}:${min}`,
+                fullStr: `${rocYear}/${mm}/${dd} ${hh}:${min}:${ss}`,
+                hourNum: now.getHours()
+            };
+        }
+
+        function startLiveClock() {
+            const update = () => {
+                const el = document.getElementById('live-clock');
+                if (el) el.innerText = `現在時間：${getFormattedNow().fullStr}`;
+            };
+            update();
+            setInterval(update, 1000);
+        }
+
+        // ==========================================
+        // 3. 首頁輪盤繪製 (1行10字元自動換行) 與加權抽獎
+        // ==========================================
+        function wrapTextByCharCount(text, maxCharsPerLine = 10) {
+            const lines = [];
+            for (let i = 0; i < text.length; i += maxCharsPerLine) {
+                lines.push(text.slice(i, i + maxCharsPerLine));
+            }
+            return lines;
+        }
+
+        function drawRouletteWheel() {
+            const canvas = document.getElementById('roulette-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const items = window.appState.wheelItems;
+            const totalProb = items.reduce((sum, item) => sum + Number(item.prob || 0), 0) || 100;
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = cx - 8;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 更新右側輪盤摘要列表
+            const summaryEl = document.getElementById('home-wheel-summary');
+            if (summaryEl) {
+                summaryEl.innerHTML = items.map(it =>
+                    `<li class="flex justify-between items-center">
+                        <span class="truncate pr-2">• ${it.label}</span>
+                        <span class="font-bold px-1.5 py-0.5 rounded bg-white border text-slate-800 whitespace-nowrap">${it.prob}%</span>
+                    </li>`
+                ).join('');
+            }
+            const coreItem = items.find(i => i.isCore) || items[0];
+            const mainTitleEl = document.getElementById('home-main-task-title');
+            if (mainTitleEl && coreItem) {
+                mainTitleEl.innerText = `1. ${coreItem.label} (掃碼登錄 TPR)`;
+            }
+
+            // 視覺上將扇形均分，方便師生清晰閱讀每個選項文字；實際抽取嚴格依照權重機率
+            const sliceAngle = (2 * Math.PI) / items.length;
+
+            items.forEach((item, index) => {
+                const startAngle = index * sliceAngle - Math.PI / 2;
+                const endAngle = startAngle + sliceAngle;
+
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = item.color || "#0284c7";
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "#ffffff";
+                ctx.stroke();
+
+                // 繪製文字 (嚴格 1 行 10 字元換行)
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(startAngle + sliceAngle / 2);
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#ffffff";
+
+                const fullText = `${item.label}(${item.prob}%)`;
+                const lines = wrapTextByCharCount(fullText, 10);
+                const fontSize = lines.length >= 3 ? 13 : 15;
+                ctx.font = `bold ${fontSize}px 'Noto Sans TC', sans-serif`;
+
+                const lineHeight = fontSize + 4;
+                const totalHeight = lines.length * lineHeight;
+                const textRadius = radius * 0.62;
+
+                lines.forEach((line, lIdx) => {
+                    const offsetY = (lIdx * lineHeight) - (totalHeight / 2) + (lineHeight / 2);
+                    ctx.fillText(line, textRadius, offsetY);
+                });
+                ctx.restore();
+            });
+        }
+
+        function spinWheel() {
+            if (isSpinning) return;
+            const items = window.appState.wheelItems;
+            if (!items || items.length === 0) return;
+
+            isSpinning = true;
+            const totalWeight = items.reduce((s, it) => s + Number(it.prob || 0), 0);
+            let rand = Math.random() * totalWeight;
+            let chosenIndex = 0;
+            for (let i = 0; i < items.length; i++) {
+                rand -= Number(items[i].prob || 0);
+                if (rand <= 0) {
+                    chosenIndex = i;
+                    break;
+                }
+            }
+
+            const sliceDeg = 360 / items.length;
+            // 指針在正上方 (-90度)，計算讓 chosenIndex 扇形中央對準正上方的角度
+            const targetCenterDeg = chosenIndex * sliceDeg + sliceDeg / 2;
+            const stopAngle = (360 - targetCenterDeg) % 360;
+            const extraSpins = 360 * 5;
+            const currentMod = currentRotation % 360;
+            const delta = (stopAngle - currentMod + 360) % 360;
+            currentRotation += extraSpins + delta;
+
+            const canvas = document.getElementById('roulette-canvas');
+            canvas.style.transition = "transform 3.6s cubic-bezier(0.15, 0.85, 0.25, 1)";
+            canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+            setTimeout(() => {
+                isSpinning = false;
+                const chosen = items[chosenIndex];
+                if (chosen.isCore) {
+                    showToast(`🎉 抽中【${chosen.label}】！即將進入護理生掃碼作業...`, '🩺');
+                    setTimeout(() => startNursingWorkflow(), 1100);
+                } else {
+                    showToast(`🎊 恭喜抽中趣味任務：【${chosen.label}】！請完成任務後繼續闖關！`, '🎁');
+                }
+            }, 3700);
+        }
+
+        // ==========================================
+        // 4. 畫面切換與雙階掃碼 (學號登入 + 禮物領取 + 病人手圈 QR)
+        // ==========================================
+        function switchView(viewName) {
+            stopCamera();
+            ['home', 'scanner', 'nis'].forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                if (el) el.classList.add('hidden');
+            });
+            const target = document.getElementById(`view-${viewName}`);
+            if (target) target.classList.remove('hidden');
+
+            if (viewName === 'home') {
+                drawRouletteWheel();
+            } else if (viewName === 'scanner') {
+                renderQuickChipsAndPatients();
+            }
+        }
+
+        function startNursingWorkflow() {
+            switchView('scanner');
+            document.getElementById('scanner-step-1').classList.remove('hidden');
+            document.getElementById('scanner-step-2').classList.add('hidden');
+            document.getElementById('step1-badge').className = "w-7 h-7 rounded-full bg-sky-600 text-white font-bold flex items-center justify-center";
+            document.getElementById('step1-badge').innerText = "2";
+            document.getElementById('step2-badge').className = "w-7 h-7 rounded-full bg-slate-300 text-slate-600 font-bold flex items-center justify-center";
+            document.getElementById('step2-text').className = "font-medium text-slate-500";
+
+            const stuInput = document.getElementById('manual-student-code');
+            if (stuInput) {
+                stuInput.value = "";
+                setTimeout(() => stuInput.focus(), 150);
+            }
+        }
+
+        function renderQuickChipsAndPatients() {
+            const chipsEl = document.getElementById('quick-student-chips');
+            if (chipsEl) {
+                const sampleStudents = window.appState.students.slice(0, 5);
+                chipsEl.innerHTML = `<span class="text-xs text-slate-500">測試學號快選：</span>` +
+                    sampleStudents.map(s => `
+                        <button type="button" onclick="handleStudentScanSuccess('${s.studentId}')" class="text-xs bg-white hover:bg-sky-100 border border-amber-300 text-slate-700 font-bold px-2.5 py-1 rounded-md shadow-sm">
+                            ${s.studentId} (${s.name})
+                        </button>
+                    `).join('');
+            }
+
+            const cardsEl = document.getElementById('patient-quick-cards');
+            if (cardsEl) {
+                cardsEl.innerHTML = window.appState.patients.map(pt => `
+                    <button type="button" onclick="selectPatientObj('${pt.id}')" class="text-left p-3 rounded-xl bg-white hover:bg-sky-50 border border-slate-300 hover:border-sky-400 shadow-sm transition flex items-center justify-between">
+                        <div>
+                            <div class="font-extrabold text-red-700 text-sm">${pt.bed} ${pt.name}</div>
+                            <div class="text-xs text-slate-500">病歷號：${pt.id} (${pt.gender}, ${pt.age}歲)</div>
+                        </div>
+                        <span class="text-xs bg-sky-100 text-sky-800 font-bold px-2 py-1 rounded">選擇 ➔</span>
+                    </button>
+                `).join('');
+            }
+        }
+
+        // 開啟 iPad / 手機相機掃描
+        function startCamera(mode) {
+            stopCamera();
+            const containerId = mode === 'student' ? 'qr-reader-student' : 'qr-reader-patient';
+            const btnId = mode === 'student' ? 'btn-start-cam-1' : 'btn-start-cam-2';
+            const btn = document.getElementById(btnId);
+            if (btn) btn.classList.add('hidden');
+
+            try {
+                html5QrScanner = new Html5Qrcode(containerId);
+                html5QrScanner.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 240, height: 240 } },
+                    (decodedText) => {
+                        if (mode === 'student') {
+                            handleStudentScanSuccess(decodedText);
+                        } else {
+                            handlePatientScanSuccess(decodedText);
+                        }
+                    },
+                    () => {}
+                ).catch(err => {
+                    console.warn("相機啟動失敗:", err);
+                    if (btn) btn.classList.remove('hidden');
+                    showToast('無法開啟相機（請確認瀏覽器權限，或直接使用下方掃描槍/快選按鈕）', '📷');
+                });
+            } catch (e) {
+                if (btn) btn.classList.remove('hidden');
+            }
+        }
+
+        function stopCamera() {
+            if (html5QrScanner) {
+                try {
+                    html5QrScanner.stop().then(() => html5QrScanner.clear()).catch(() => {});
+                } catch (e) {}
+                html5QrScanner = null;
+            }
+            const b1 = document.getElementById('btn-start-cam-1');
+            const b2 = document.getElementById('btn-start-cam-2');
+            if (b1) b1.classList.remove('hidden');
+            if (b2) b2.classList.remove('hidden');
+        }
+
+        // 步驟 1：掃描或手動登入學號 -> 自動比對名單 -> 檢查禮物領取狀態 -> 寫入 Google Sheet
+        function handleStudentScanSuccess(rawCode) {
+            const inputId = (rawCode || "").trim().toUpperCase();
+            if (!inputId) {
+                showToast('請掃描學生證或手動輸入學號！', '⚠️');
+                return;
+            }
+
+            // 防呆檢查：若在步驟一誤刷成病人手圈 QR Code
+            if (inputId.startsWith('PT:') || inputId === 'P') {
+                showToast('⚠️ 您目前在「步驟一：登入學號」，偵測到疑似病人手圈條碼，請先掃描或輸入學號喔！', '🚫');
+                document.getElementById('manual-student-code').value = "";
+                document.getElementById('manual-student-code').focus();
+                return;
+            }
+
+            stopCamera();
+            const nowInfo = getFormattedNow();
+
+            const matched = window.appState.students.find(s => s.studentId.toUpperCase() === inputId);
+            const studentObj = {
+                studentId: matched ? matched.studentId : inputId,
+                name: matched ? matched.name : "護理生",
+                loginTime: nowInfo.fullStr
+            };
+            window.appState.currentStudent = studentObj;
+
+            // 初始化該學號的禮物領取狀態
+            if (!window.appState.giftClaims[studentObj.studentId]) {
+                window.appState.giftClaims[studentObj.studentId] = {
+                    studentId: studentObj.studentId,
+                    name: studentObj.name,
+                    itemAClaimed: false,
+                    itemATime: "",
+                    itemBClaimed: false,
+                    itemBTime: ""
+                };
+            }
+
+            // 更新頂部狀態列與步驟二資訊
+            document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+            document.getElementById('header-student-info').innerText = `${studentObj.studentId} ${studentObj.name} (登入：${studentObj.loginTime})`;
+            document.getElementById('confirmed-student-name').innerText = `${studentObj.studentId} ${studentObj.name}`;
+            document.getElementById('login-timestamp-badge').innerText = `登入時間：${studentObj.loginTime}`;
+
+            // 渲染禮物領取狀態警示語與按鈕
+            const alertMsg = window.renderGiftStatusUI();
+
+            // 傳送學生登入與當前禮物領取狀態至 Google Sheet
+            const claimData = window.appState.giftClaims[studentObj.studentId];
+            sendToGoogleSheet({
+                action: 'student_login',
+                studentId: studentObj.studentId,
+                studentName: studentObj.name,
+                loginTime: studentObj.loginTime,
+                giftStatus: alertMsg,
+                giftAName: window.appState.giftConfig.itemA,
+                giftAClaimed: claimData.itemAClaimed ? '已領取' : '未領取',
+                giftATime: claimData.itemATime || '',
+                giftBName: window.appState.giftConfig.itemB,
+                giftBClaimed: claimData.itemBClaimed ? '已領取' : '未領取',
+                giftBTime: claimData.itemBTime || ''
+            });
+
+            showToast(`✅ 學號 ${studentObj.studentId} (${studentObj.name}) 登入成功！請進行第 3 步掃描病人手圈`, '🎓');
+
+            // 進入步驟 3：掃描病人手圈 QR Code
+            document.getElementById('scanner-step-1').classList.add('hidden');
+            document.getElementById('scanner-step-2').classList.remove('hidden');
+            document.getElementById('step1-badge').className = "w-7 h-7 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center";
+            document.getElementById('step1-badge').innerText = "✓";
+            document.getElementById('step2-badge').className = "w-7 h-7 rounded-full bg-sky-600 text-white font-bold flex items-center justify-center";
+            document.getElementById('step2-text').className = "font-bold text-sky-900";
+            const ptInput = document.getElementById('manual-patient-code');
+            if (ptInput) {
+                ptInput.value = "";
+                setTimeout(() => ptInput.focus(), 150);
+            }
+        }
+
+        // 渲染並回傳禮物領取警示語
+        window.renderGiftStatusUI = function() {
+            const stu = window.appState.currentStudent;
+            if (!stu) return "";
+            const cfg = window.appState.giftConfig;
+            const claim = window.appState.giftClaims[stu.studentId] || {
+                studentId: stu.studentId,
+                name: stu.name,
+                itemAClaimed: false,
+                itemATime: "",
+                itemBClaimed: false,
+                itemBTime: ""
+            };
+
+            const giftPageStuEl = document.getElementById('gift-page-student');
+            if (giftPageStuEl) giftPageStuEl.innerText = `${stu.studentId} ${stu.name}`;
+            const giftPageRecEl = document.getElementById('gift-page-record-count');
+            if (giftPageRecEl) {
+                const count = window.vitalRecords.filter(r => r.studentId === stu.studentId).length;
+                giftPageRecEl.innerText = count;
+            }
+
+            const panel = document.getElementById('gift-claim-panel');
+            const alertTextEl = document.getElementById('gift-status-alert-text');
+            const btnA = document.getElementById('btn-claim-gift-a');
+            const btnB = document.getElementById('btn-claim-gift-b');
+            const labelA = document.getElementById('label-gift-a-btn');
+            const timeA = document.getElementById('time-gift-a-btn');
+            const labelB = document.getElementById('label-gift-b-btn');
+            const timeB = document.getElementById('time-gift-b-btn');
+
+            let statusMessage = "";
+            if (!claim.itemAClaimed && !claim.itemBClaimed) {
+                statusMessage = `【未領取禮物】（可領取【${cfg.itemA}】與【${cfg.itemB}】）`;
+                panel.className = "rounded-xl border-2 border-amber-400 bg-amber-50 p-4 space-y-3 transition-all";
+                alertTextEl.className = "text-base sm:text-lg font-extrabold mt-0.5 text-amber-800";
+            } else if (claim.itemAClaimed && !claim.itemBClaimed) {
+                statusMessage = `已領取禮物：【${cfg.itemA}】，尚未領取【${cfg.itemB}】`;
+                panel.className = "rounded-xl border-2 border-sky-400 bg-sky-50 p-4 space-y-3 transition-all";
+                alertTextEl.className = "text-base sm:text-lg font-extrabold mt-0.5 text-sky-900";
+            } else if (!claim.itemAClaimed && claim.itemBClaimed) {
+                statusMessage = `已領取禮物：【${cfg.itemB}】，尚未領取【${cfg.itemA}】`;
+                panel.className = "rounded-xl border-2 border-sky-400 bg-sky-50 p-4 space-y-3 transition-all";
+                alertTextEl.className = "text-base sm:text-lg font-extrabold mt-0.5 text-sky-900";
+            } else {
+                statusMessage = `已領取禮物：【${cfg.itemA}】、【${cfg.itemB}】（兩項皆已領取完畢）`;
+                panel.className = "rounded-xl border-2 border-rose-300 bg-rose-50 p-4 space-y-3 transition-all";
+                alertTextEl.className = "text-base sm:text-lg font-extrabold mt-0.5 text-rose-700";
+            }
+            alertTextEl.innerText = statusMessage;
+
+            // 更新 A 按鈕狀態
+            if (claim.itemAClaimed) {
+                btnA.disabled = true;
+                btnA.className = "p-3 rounded-xl font-bold text-sm border-2 border-slate-300 bg-slate-200 text-slate-500 cursor-not-allowed flex flex-col items-center justify-center gap-1";
+                labelA.innerText = `✅ 已領取 A：【${cfg.itemA}】`;
+                timeA.innerText = `領取時間：${claim.itemATime || '已記錄'}`;
+            } else {
+                btnA.disabled = false;
+                btnA.className = "p-3 rounded-xl font-bold text-sm shadow border-2 border-amber-500 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white transition flex flex-col items-center justify-center gap-1";
+                labelA.innerText = `🎁 點擊領取 A：【${cfg.itemA}】`;
+                timeA.innerText = `每人限領一次`;
+            }
+
+            // 更新 B 按鈕狀態
+            if (claim.itemBClaimed) {
+                btnB.disabled = true;
+                btnB.className = "p-3 rounded-xl font-bold text-sm border-2 border-slate-300 bg-slate-200 text-slate-500 cursor-not-allowed flex flex-col items-center justify-center gap-1";
+                labelB.innerText = `✅ 已領取 B：【${cfg.itemB}】`;
+                timeB.innerText = `領取時間：${claim.itemBTime || '已記錄'}`;
+            } else {
+                btnB.disabled = false;
+                btnB.className = "p-3 rounded-xl font-bold text-sm shadow border-2 border-indigo-500 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white transition flex flex-col items-center justify-center gap-1";
+                labelB.innerText = `🎁 點擊領取 B：【${cfg.itemB}】`;
+                timeB.innerText = `每人限領一次`;
+            }
+
+            return statusMessage;
+        };
+
+        // 學生點擊領取 A 或 B 禮物 -> 記錄領取時間點 -> 同步雲端與 Google Sheet
+        function claimStudentGift(itemKey) {
+            const stu = window.appState.currentStudent;
+            if (!stu) {
+                showToast('請先登入學生學號！', '⚠️');
+                return;
+            }
+            const cfg = window.appState.giftConfig;
+            const claim = window.appState.giftClaims[stu.studentId] || {
+                studentId: stu.studentId,
+                name: stu.name,
+                itemAClaimed: false,
+                itemATime: "",
+                itemBClaimed: false,
+                itemBTime: ""
+            };
+
+            const nowInfo = getFormattedNow();
+            let claimedItemName = "";
+
+            if (itemKey === 'A') {
+                if (claim.itemAClaimed) {
+                    showToast(`⚠️ 學號 ${stu.studentId} 已經領取過【${cfg.itemA}】，每人限領一次！`, '🚫');
+                    return;
+                }
+                claim.itemAClaimed = true;
+                claim.itemATime = nowInfo.fullStr;
+                claimedItemName = cfg.itemA;
+            } else if (itemKey === 'B') {
+                if (claim.itemBClaimed) {
+                    showToast(`⚠️ 學號 ${stu.studentId} 已經領取過【${cfg.itemB}】，每人限領一次！`, '🚫');
+                    return;
+                }
+                claim.itemBClaimed = true;
+                claim.itemBTime = nowInfo.fullStr;
+                claimedItemName = cfg.itemB;
+            }
+
+            window.appState.giftClaims[stu.studentId] = claim;
+            const updatedAlert = window.renderGiftStatusUI();
+
+            if (typeof window.syncGiftClaimToCloud === 'function') {
+                window.syncGiftClaimToCloud(stu.studentId, claim);
+            }
+            if (typeof window.syncConfigToCloud === 'function') {
+                window.syncConfigToCloud();
+            }
+
+            sendToGoogleSheet({
+                action: 'gift_claim',
+                studentId: stu.studentId,
+                studentName: stu.name,
+                claimedItem: claimedItemName,
+                claimTime: nowInfo.fullStr,
+                giftAName: cfg.itemA,
+                giftAClaimed: claim.itemAClaimed ? '已領取' : '未領取',
+                giftATime: claim.itemATime || '',
+                giftBName: cfg.itemB,
+                giftBClaimed: claim.itemBClaimed ? '已領取' : '未領取',
+                giftBTime: claim.itemBTime || '',
+                summaryStatus: updatedAlert
+            });
+
+            showToast(`🎁 登記成功！已領取【${claimedItemName}】（時間：${nowInfo.timeStr}）`, '✅');
+        }
+
+        // 步驟 2：掃描病人手圈 QR Code -> 解析固定病人檔案 -> 開啟 NIS 表單
+        function handlePatientScanSuccess(rawQr) {
+            const text = (rawQr || "").trim();
+            if (!text) {
+                showToast('請掃描病人手圈 QR Code！', '⚠️');
+                return;
+            }
+            stopCamera();
+
+            let matchedPt = null;
+            if (text.startsWith('PT:')) {
+                const parts = text.split(':');
+                const ptId = parts[1];
+                matchedPt = window.appState.patients.find(p => p.id === ptId);
+                if (!matchedPt && parts.length >= 4) {
+                    matchedPt = {
+                        id: ptId,
+                        bed: parts[2],
+                        name: parts[3],
+                        gender: parts[4] || "男",
+                        age: parts[5] || 60,
+                        admDate: parts[6] || "115/11/25",
+                        doctor: parts[7] || "主治醫師"
+                    };
+                }
+            } else {
+                matchedPt = window.appState.patients.find(p =>
+                    p.id === text || p.bed.includes(text) || p.name === text
+                );
+            }
+
+            if (!matchedPt) {
+                showToast('⚠️ 找不到對應的病人手圈資料，請確認 QR Code 或點選下方病人卡片！', '🚫');
+                return;
+            }
+            loadPatientIntoNis(matchedPt);
+        }
+
+        function selectPatientObj(ptId) {
+            const pt = window.appState.patients.find(p => p.id === ptId);
+            if (pt) loadPatientIntoNis(pt);
+        }
+
+        function loadPatientIntoNis(pt) {
+            window.appState.currentPatient = pt;
+            const nowInfo = getFormattedNow();
+
+            document.getElementById('nis-pt-id').innerText = `病歷號：${pt.id}`;
+            document.getElementById('nis-pt-bed-name').innerText = `${pt.bed} ${pt.name}`;
+            document.getElementById('nis-pt-info').innerText = `${pt.gender}, ${pt.age}歲 | 住院日：${pt.admDate} | ${pt.doctor}`;
+            document.getElementById('form-pt-title').innerText = `${pt.bed} ${pt.name}`;
+
+            const stu = window.appState.currentStudent;
+            document.getElementById('nis-operator-name').innerText = stu ? `${stu.studentId} ${stu.name}` : "未登入";
+
+            document.getElementById('vs-date').value = nowInfo.dateStr;
+            document.getElementById('vs-time').value = nowInfo.timeStr;
+
+            // 自動對應最接近的臨床測量時段 (04, 08, 12, 16, 20, 24)
+            const slots = [4, 8, 12, 16, 20, 24];
+            let closest = 8;
+            let minDiff = 99;
+            slots.forEach(s => {
+                const diff = Math.abs(nowInfo.hourNum - s);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = s;
+                }
+            });
+            document.getElementById('vs-slot').value = String(closest).padStart(2, '0');
+
+            updateSummaryPreview();
+            switchView('nis');
+            switchNisTab('vitalsign');
+            showToast(`🏥 已辨識病人：${pt.bed} ${pt.name}，請輸入生命徵象！`, '📋');
+        }
+
+        // ==========================================
+        // 5. NIS 生命徵象表單互動與自動繪製 TPR Curve
+        // ==========================================
+        function switchNisTab(tabName) {
+            ['vitalsign', 'tpr', 'gift', 'records'].forEach(t => {
+                const panel = document.getElementById(`nis-panel-${t}`);
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (!panel || !btn) return;
+                if (t === tabName) {
+                    panel.classList.remove('hidden');
+                    btn.className = t === 'gift'
+                        ? "px-4 py-2 rounded-t-md font-bold bg-amber-300 text-slate-950 shadow whitespace-nowrap"
+                        : "px-4 py-2 rounded-t-md font-bold bg-[#f8d7da] text-slate-900 shadow whitespace-nowrap";
+                } else {
+                    panel.classList.add('hidden');
+                    btn.className = t === 'gift'
+                        ? "px-4 py-2 rounded-t-md font-bold bg-amber-500/90 text-slate-950 hover:bg-amber-400 whitespace-nowrap"
+                        : "px-4 py-2 rounded-t-md font-bold bg-slate-700/70 text-white hover:bg-slate-600 whitespace-nowrap";
+                }
+            });
+
+            if (tabName === 'tpr') {
+                window.drawTprChart();
+            } else if (tabName === 'gift') {
+                window.renderGiftStatusUI();
+            } else if (tabName === 'records') {
+                window.renderRecordsTable();
+            }
+        }
+
+        function selectSite(category, value, btnEl) {
+            const groupClass = `${category}-site-btn`;
+            document.querySelectorAll(`.${groupClass}`).forEach(b => {
+                b.classList.remove('nis-btn-active');
+                b.classList.add('nis-btn-default');
+            });
+            btnEl.classList.remove('nis-btn-default');
+            btnEl.classList.add('nis-btn-active');
+
+            if (category === 'temp') window.appState.selectedTempSite = value;
+            if (category === 'pulse') window.appState.selectedPulseSite = value;
+            if (category === 'bpType') window.appState.selectedBpType = value;
+            if (category === 'bpPos') window.appState.selectedBpPos = value;
+            if (category === 'bpLimb') window.appState.selectedBpLimb = value;
+            if (category === 'pain') window.appState.selectedPain = value;
+
+            updateSummaryPreview();
+        }
+
+        function setUnmeasured(inputId) {
+            const el = document.getElementById(inputId);
+            if (el) {
+                el.value = "";
+                updateSummaryPreview();
+            }
+        }
+
+        function updateSummaryPreview() {
+            const d = document.getElementById('vs-date').value;
+            const t = document.getElementById('vs-time').value;
+            const temp = document.getElementById('input-temp').value;
+            const pulse = document.getElementById('input-pulse').value;
+            const resp = document.getElementById('input-resp').value;
+            const sbp = document.getElementById('input-sbp').value;
+            const dbp = document.getElementById('input-dbp').value;
+            const painScore = document.getElementById('input-pain-score').value;
+
+            const tempStr = temp ? `T:${temp}°C(${window.appState.selectedTempSite})` : `T:不需測量`;
+            const pulseStr = pulse ? `P:${pulse}次/min(${window.appState.selectedPulseSite})` : `P:不需測量`;
+            const respStr = resp ? `R:${resp}次/min` : `R:不需測量`;
+            const bpStr = (sbp && dbp) ? `血壓:${sbp}/${dbp}mmHg(${window.appState.selectedBpPos}/${window.appState.selectedBpLimb})` : `血壓:未測量`;
+            const painStr = window.appState.selectedPain === '有疼痛' ? `疼痛:${painScore}分` : `疼痛:${window.appState.selectedPain}`;
+
+            document.getElementById('live-summary-text').innerText = `${d} ${t} ${tempStr} ${pulseStr} ${respStr} ${bpStr} ${painStr}`;
+        }
+
+        function saveVitalSigns() {
+            const pt = window.appState.currentPatient;
+            if (!pt) {
+                showToast('請先選擇或掃描病人手圈！', '⚠️');
+                return;
+            }
+            const stu = window.appState.currentStudent || { studentId: "TEST", name: "測試生" };
+
+            const record = {
+                date: document.getElementById('vs-date').value,
+                time: document.getElementById('vs-time').value,
+                slot: document.getElementById('vs-slot').value,
+                studentId: stu.studentId,
+                studentName: stu.name,
+                patientId: pt.id,
+                patientBed: pt.bed,
+                patientName: pt.name,
+                temp: parseFloat(document.getElementById('input-temp').value) || null,
+                tempSite: window.appState.selectedTempSite,
+                pulse: parseInt(document.getElementById('input-pulse').value) || null,
+                pulseSite: window.appState.selectedPulseSite,
+                resp: parseInt(document.getElementById('input-resp').value) || null,
+                sbp: parseInt(document.getElementById('input-sbp').value) || null,
+                dbp: parseInt(document.getElementById('input-dbp').value) || null,
+                pain: window.appState.selectedPain,
+                painScore: parseInt(document.getElementById('input-pain-score').value) || 0
+            };
+
+            window.vitalRecords.unshift(record);
+            window.renderRecordsTable();
+
+            // 同步至雲端 (10台 iPad) 與 Google Sheet
+            if (typeof window.syncRecordToCloud === 'function') {
+                window.syncRecordToCloud(record);
+            }
+            sendToGoogleSheet({
+                action: 'vital_sign',
+                studentId: record.studentId,
+                studentName: record.studentName,
+                patientBed: record.patientBed,
+                patientName: record.patientName,
+                temp: record.temp || '',
+                tempSite: record.tempSite,
+                pulse: record.pulse || '',
+                pulseSite: record.pulseSite,
+                resp: record.resp || '',
+                bp: (record.sbp && record.dbp) ? `${record.sbp}/${record.dbp}` : ''
+            });
+
+            showToast('💾 生命徵象已存檔！已轉換為 TPR 圖示，完成後可點選「前往第 5 步：領取禮物」', '📈');
+            switchNisTab('tpr');
+        }
+
+        window.renderRecordsTable = function() {
+            const tbody = document.getElementById('records-table-body');
+            const countEl = document.getElementById('record-count');
+            if (countEl) countEl.innerText = window.vitalRecords.length;
+            if (!tbody) return;
+
+            if (window.vitalRecords.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">尚無登錄紀錄，請先完成 Vital Sign 存檔。</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = window.vitalRecords.map(r => `
+                <tr class="hover:bg-sky-50">
+                    <td class="p-2.5 font-mono text-xs">${r.date} ${r.time} (${r.slot}點)</td>
+                    <td class="p-2.5 font-bold text-sky-800">${r.studentId} ${r.studentName}</td>
+                    <td class="p-2.5 font-bold text-red-700">${r.patientBed} ${r.patientName}</td>
+                    <td class="p-2.5 text-blue-700 font-bold">${r.temp ? `${r.temp}°C (${r.tempSite})` : '--'}</td>
+                    <td class="p-2.5 text-red-600 font-bold">${r.pulse ? `${r.pulse} (${r.pulseSite})` : '--'}</td>
+                    <td class="p-2.5 font-bold">${r.resp ? `${r.resp}` : '--'}</td>
+                    <td class="p-2.5 font-bold text-slate-800">${(r.sbp && r.dbp) ? `${r.sbp}/${r.dbp}` : '--'}</td>
+                </tr>
+            `).join('');
+        };
+
+        // 繪製擬真臨床 TPR CURVE 網格與圖示 (對應截圖 2 & 3)
+        window.drawTprChart = function() {
+            const canvas = document.getElementById('tpr-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width;
+            const H = canvas.height;
+            ctx.clearRect(0, 0, W, H);
+
+            const pt = window.appState.currentPatient || window.appState.patients[0];
+            const leftAxisW = 190;
+            const topHeaderH = 110;
+            const bottomBpH = 90;
+            const gridH = H - topHeaderH - bottomBpH;
+            const days = 7;
+            const slotsPerDay = 6; // 4, 8, 12, 16, 20, 24
+            const totalCols = days * slotsPerDay;
+            const colW = (W - leftAxisW) / totalCols;
+            const rows = 35; // 35°C ~ 42°C (每大格1度=5小格)
+            const rowH = gridH / rows;
+
+            // 1. 繪製表頭與左側刻度區背景
+            ctx.fillStyle = "#f8fafc";
+            ctx.fillRect(0, 0, W, topHeaderH);
+            ctx.fillRect(0, topHeaderH, leftAxisW, gridH + bottomBpH);
+
+            ctx.strokeStyle = "#64748b";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(0, 0, W, H);
+
+            // 左側表頭標籤
+            const headers = ["日期", "住院日數", "手術日數", "時間"];
+            const headerRowH = topHeaderH / 4;
+            ctx.font = "bold 12px 'Noto Sans TC', sans-serif";
+            ctx.fillStyle = "#1e293b";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            headers.forEach((h, idx) => {
+                const y = idx * headerRowH;
+                ctx.strokeStyle = "#94a3b8";
+                ctx.strokeRect(0, y, leftAxisW, headerRowH);
+                ctx.fillText(h, leftAxisW / 2, y + headerRowH / 2);
+            });
+
+            // 左側 R / P / T / 痛 刻度欄
+            const subCols = [
+                { title: "R", color: "#0f172a", vals: [70, 60, 50, 40, 30, 20, 10] },
+                { title: "P", color: "#dc2626", vals: [160, 140, 120, 100, 80, 60, 40] },
+                { title: "T", color: "#1d4ed8", vals: [41, 40, 39, 38, 37, 36, 35] },
+                { title: "痛", color: "#15803d", vals: [10, 9, 8, 7, 5, 3, 0] }
+            ];
+            const subColW = leftAxisW / 4;
+
+            subCols.forEach((sc, idx) => {
+                const x = idx * subColW;
+                ctx.fillStyle = sc.color;
+                ctx.fillText(sc.title, x + subColW / 2, topHeaderH - headerRowH / 2);
+
+                sc.vals.forEach((v, vIdx) => {
+                    const y = topHeaderH + (vIdx + 1) * 5 * rowH;
+                    ctx.fillText(String(v), x + subColW / 2, y);
+                });
+            });
+
+            // 2. 繪製 7 天垂直欄與時段 (4, 8, 12, 4, 8, 12)
+            const timeLabels = ["4", "8", "12", "4", "8", "12"];
+            for (let d = 0; d < days; d++) {
+                const dayX = leftAxisW + d * slotsPerDay * colW;
+                const dayW = slotsPerDay * colW;
+
+                // 日期與住院日數
+                ctx.fillStyle = "#0f172a";
+                ctx.font = "bold 12px 'Noto Sans TC', sans-serif";
+                const dateLabel = d === 0 ? (document.getElementById('vs-date')?.value || "115/11/27") : `第 ${d + 1} 日`;
+                ctx.fillText(dateLabel, dayX + dayW / 2, headerRowH * 0.5);
+                ctx.fillText(String(d + 1), dayX + dayW / 2, headerRowH * 1.5);
+
+                for (let s = 0; s < slotsPerDay; s++) {
+                    const sx = dayX + s * colW;
+                    ctx.strokeStyle = "#cbd5e1";
+                    ctx.beginPath();
+                    ctx.moveTo(sx, topHeaderH - headerRowH);
+                    ctx.lineTo(sx, H);
+                    ctx.stroke();
+
+                    ctx.fillStyle = "#334155";
+                    ctx.font = "11px sans-serif";
+                    ctx.fillText(timeLabels[s], sx + colW / 2, topHeaderH - headerRowH / 2);
+                }
+
+                // 每日紅色分隔粗線
+                ctx.strokeStyle = "#dc2626";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(dayX, 0);
+                ctx.lineTo(dayX, H);
+                ctx.stroke();
+                ctx.lineWidth = 1;
+            }
+
+            // 3. 繪製水平網格線
+            for (let r = 0; r <= rows; r++) {
+                const y = topHeaderH + r * rowH;
+                ctx.strokeStyle = (r % 5 === 0) ? "#64748b" : "#bae6fd";
+                ctx.lineWidth = (r % 5 === 0) ? 1.2 : 0.7;
+                ctx.beginPath();
+                ctx.moveTo(leftAxisW, y);
+                ctx.lineTo(W, y);
+                ctx.stroke();
+            }
+
+            // 4. 底部血壓與疼痛記錄欄
+            const bpTopY = topHeaderH + gridH;
+            const bottomRows = ["血壓 mmHg", "疼痛指數(分)"];
+            const bRowH = bottomBpH / 2;
+            bottomRows.forEach((label, idx) => {
+                const y = bpTopY + idx * bRowH;
+                ctx.strokeStyle = "#64748b";
+                ctx.strokeRect(0, y, W, bRowH);
+                ctx.fillStyle = "#0f172a";
+                ctx.font = "bold 12px 'Noto Sans TC', sans-serif";
+                ctx.fillText(label, leftAxisW / 2, y + bRowH / 2);
+            });
+
+            // 5. 篩選目前病人的紀錄並繪製對應 TPR 圖示與折線
+            const ptRecords = window.vitalRecords
+                .filter(r => r.patientId === pt.id)
+                .slice()
+                .reverse();
+
+            const slotIndexMap = { "04": 0, "08": 1, "12": 2, "16": 3, "20": 4, "24": 5 };
+            const tempPoints = [];
+            const pulsePoints = [];
+            const respPoints = [];
+
+            ptRecords.forEach((rec, idx) => {
+                const slotIdx = slotIndexMap[rec.slot] !== undefined ? slotIndexMap[rec.slot] : (idx % 6);
+                const cx = leftAxisW + slotIdx * colW + colW / 2;
+
+                // 體溫座標 (42°C在頂端0格, 35°C在35格 -> 每1°C = 5格)
+                if (rec.temp && rec.temp >= 34 && rec.temp <= 42) {
+                    const ty = topHeaderH + (42 - rec.temp) * 5 * rowH;
+                    tempPoints.push({ x: cx, y: ty, site: rec.tempSite });
+                }
+
+                // 脈搏座標 (180在頂端0格, 40在35格 -> 每20次 = 5格 -> 每1次 = 0.25格)
+                if (rec.pulse && rec.pulse >= 30 && rec.pulse <= 180) {
+                    const py = topHeaderH + ((180 - rec.pulse) / 20) * 5 * rowH;
+                    pulsePoints.push({ x: cx, y: py, site: rec.pulseSite });
+                }
+
+                // 呼吸座標 (80在頂端0格, 10在35格 -> 每10次 = 5格 -> 每1次 = 0.5格)
+                if (rec.resp && rec.resp >= 5 && rec.resp <= 80) {
+                    const ry = topHeaderH + ((80 - rec.resp) / 10) * 5 * rowH;
+                    respPoints.push({ x: cx, y: ry });
+                }
+
+                // 底部血壓欄位填入數值 (還原截圖 3 紅框樣式)
+                if (rec.sbp && rec.dbp) {
+                    const dayCenterX = leftAxisW + (slotsPerDay * colW) / 2;
+                    ctx.fillStyle = "#1e293b";
+                    ctx.font = "bold 12px monospace";
+                    ctx.fillText(`${rec.time} ${rec.sbp}/${rec.dbp}`, dayCenterX, bpTopY + bRowH * 0.5);
+                }
+                if (rec.pain === '有疼痛') {
+                    const dayCenterX = leftAxisW + (slotsPerDay * colW) / 2;
+                    ctx.fillStyle = "#15803d";
+                    ctx.font = "bold 12px monospace";
+                    ctx.fillText(`${rec.painScore} 分`, dayCenterX, bpTopY + bRowH * 1.5);
+                }
+            });
+
+            // 畫藍色體溫折線與圖示
+            if (tempPoints.length > 1) {
+                ctx.strokeStyle = "#1d4ed8";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                tempPoints.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+                ctx.stroke();
+            }
+            tempPoints.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
+                if (p.site === '耳溫') {
+                    ctx.fillStyle = "#1d4ed8";
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#1d4ed8";
+                    ctx.stroke();
+                }
+            });
+
+            // 畫紅色脈搏折線與圖示
+            if (pulsePoints.length > 1) {
+                ctx.strokeStyle = "#dc2626";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                pulsePoints.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+                ctx.stroke();
+            }
+            pulsePoints.forEach(p => {
+                ctx.fillStyle = "#dc2626";
+                ctx.strokeStyle = "#dc2626";
+                if (p.site === '心尖脈') {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y - 6);
+                    ctx.lineTo(p.x - 6, p.y + 5);
+                    ctx.lineTo(p.x + 6, p.y + 5);
+                    ctx.closePath();
+                    ctx.stroke();
+                } else {
+                    ctx.fillRect(p.x - 5, p.y - 5, 10, 10);
+                }
+            });
+
+            // 畫黑色呼吸折線與 ✕ 圖示
+            if (respPoints.length > 1) {
+                ctx.strokeStyle = "#0f172a";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                respPoints.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+                ctx.stroke();
+            }
+            respPoints.forEach(p => {
+                ctx.strokeStyle = "#0f172a";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(p.x - 5, p.y - 5);
+                ctx.lineTo(p.x + 5, p.y + 5);
+                ctx.moveTo(p.x + 5, p.y - 5);
+                ctx.lineTo(p.x - 5, p.y + 5);
+                ctx.stroke();
+            });
+        };
+
+        // ==========================================
+        // 6. 老師後台設定中心 (學號名單 / 禮物管理 / 5位病人 QR / 輪盤 / Google Sheet)
+        // ==========================================
+        function openAdminModal(defaultTab = 'students') {
+            document.getElementById('admin-modal').classList.remove('hidden');
+            switchAdminTab(defaultTab);
+        }
+
+        function closeAdminModal() {
+            document.getElementById('admin-modal').classList.add('hidden');
+        }
+
+        function switchAdminTab(tab) {
+            const tabs = ['students', 'gifts', 'patients', 'wheel', 'gsheet'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`admin-tab-${t}`);
+                const panel = document.getElementById(`admin-panel-${t}`);
+                if (!btn || !panel) return;
+                if (t === tab) {
+                    btn.className = "px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm bg-white text-sky-800 border-t border-x";
+                    panel.classList.remove('hidden');
+                } else {
+                    btn.className = "px-3 sm:px-4 py-2 rounded-t-lg font-bold text-xs sm:text-sm text-slate-600 hover:bg-white/60";
+                    panel.classList.add('hidden');
+                }
+            });
+
+            if (tab === 'students') renderAdminStudents();
+            if (tab === 'gifts') renderAdminGifts();
+            if (tab === 'patients') renderAdminPatients();
+            if (tab === 'wheel') renderAdminWheel();
+            if (tab === 'gsheet') {
+                document.getElementById('gsheet-webhook-url').value = window.appState.googleSheetUrl || "";
+            }
+        }
+
+        // 後台分頁 1：學生學號名單管理
+        function renderAdminStudents() {
+            const list = window.appState.students;
+            document.getElementById('student-count').innerText = list.length;
+            const tbody = document.getElementById('admin-student-tbody');
+            tbody.innerHTML = list.map((s, idx) => `
+                <tr>
+                    <td class="px-3 py-1.5 font-mono font-bold text-sky-800">${s.studentId}</td>
+                    <td class="px-3 py-1.5 font-bold">${s.name}</td>
+                    <td class="px-3 py-1.5 text-right">
+                        <button onclick="removeStudent(${idx})" class="text-rose-600 hover:underline font-bold">刪除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function removeStudent(idx) {
+            window.appState.students.splice(idx, 1);
+            renderAdminStudents();
+            renderQuickChipsAndPatients();
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+        }
+
+        function fillSampleStudents() {
+            document.getElementById('bulk-student-input').value =
+`N114001, 王小明
+N114002, 陳雅婷
+N114003, 林佳蓉
+N114004, 張宇軒
+N114005, 李宜蓁
+N114006, 黃柏翰
+N114007, 吳佩珊
+N114008, 蔡宗翰
+N114009, 許芷若
+N114010, 鄭冠宇`;
+        }
+
+        function importStudentsFromText() {
+            const raw = document.getElementById('bulk-student-input').value.trim();
+            if (!raw) {
+                showToast('請先貼上學生學號資料！', '⚠️');
+                return;
+            }
+            const lines = raw.split(/\r?\n/);
+            let added = 0;
+            lines.forEach(line => {
+                const parts = line.split(/[,\t，]+/).map(x => x.trim()).filter(Boolean);
+                if (parts.length >= 1) {
+                    const studentId = parts[0].toUpperCase();
+                    const name = parts[1] || "護理生";
+                    const existIdx = window.appState.students.findIndex(s => s.studentId.toUpperCase() === studentId);
+                    if (existIdx >= 0) {
+                        window.appState.students[existIdx] = { studentId, name };
+                    } else {
+                        window.appState.students.push({ studentId, name });
+                    }
+                    added++;
+                }
+            });
+            renderAdminStudents();
+            renderQuickChipsAndPatients();
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+            showToast(`✅ 成功匯入 / 更新 ${added} 筆學生學號！`, '📥');
+        }
+
+        // 後台分頁 2：禮物名稱設定與學生領取紀錄同步修正
+        function renderAdminGifts() {
+            const cfg = window.appState.giftConfig;
+            document.getElementById('edit-gift-name-a').value = cfg.itemA;
+            document.getElementById('edit-gift-name-b').value = cfg.itemB;
+            document.getElementById('th-gift-a').innerText = `A品項【${cfg.itemA}】`;
+            document.getElementById('th-gift-b').innerText = `B品項【${cfg.itemB}】`;
+            window.renderAdminGiftRecords();
+        }
+
+        function saveGiftConfig() {
+            const a = document.getElementById('edit-gift-name-a').value.trim() || "不鏽鋼膠台";
+            const b = document.getElementById('edit-gift-name-b').value.trim() || "按摩棒垂";
+            window.appState.giftConfig = { itemA: a, itemB: b };
+            renderAdminGifts();
+            if (window.appState.currentStudent) window.renderGiftStatusUI();
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+            showToast(`✅ 已更新禮物名稱為【${a}】與【${b}】！`, '🎁');
+        }
+
+        window.renderAdminGiftRecords = function() {
+            const tbody = document.getElementById('admin-gift-tbody');
+            if (!tbody) return;
+            const keyword = (document.getElementById('filter-gift-student')?.value || "").trim().toUpperCase();
+
+            const idMap = new Map();
+            window.appState.students.forEach(s => {
+                idMap.set(s.studentId.toUpperCase(), { studentId: s.studentId, name: s.name });
+            });
+            Object.values(window.appState.giftClaims).forEach(c => {
+                if (!idMap.has(c.studentId.toUpperCase())) {
+                    idMap.set(c.studentId.toUpperCase(), { studentId: c.studentId, name: c.name || "護理生" });
+                }
+            });
+
+            const rows = Array.from(idMap.values()).filter(item =>
+                !keyword || item.studentId.toUpperCase().includes(keyword) || item.name.includes(keyword)
+            );
+
+            tbody.innerHTML = rows.map(stu => {
+                const claim = window.appState.giftClaims[stu.studentId] || {
+                    studentId: stu.studentId,
+                    name: stu.name,
+                    itemAClaimed: false,
+                    itemATime: "",
+                    itemBClaimed: false,
+                    itemBTime: ""
+                };
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-3 py-2 font-bold text-slate-800">${stu.studentId} <span class="font-normal text-slate-500">${stu.name}</span></td>
+                        <td class="px-3 py-2">
+                            <label class="inline-flex items-center gap-1.5 cursor-pointer font-bold ${claim.itemAClaimed ? 'text-emerald-700' : 'text-slate-400'}">
+                                <input type="checkbox" ${claim.itemAClaimed ? 'checked' : ''} onchange="adminToggleGift('${stu.studentId}', '${stu.name}', 'A', this.checked)" class="w-4 h-4 rounded">
+                                <span>${claim.itemAClaimed ? '已領取' : '未領取'}</span>
+                            </label>
+                        </td>
+                        <td class="px-3 py-2">
+                            <input type="text" value="${claim.itemATime || ''}" onchange="adminUpdateGiftTime('${stu.studentId}', '${stu.name}', 'A', this.value)" placeholder="尚未領取" class="border rounded px-2 py-1 text-xs w-36 bg-slate-50">
+                        </td>
+                        <td class="px-3 py-2">
+                            <label class="inline-flex items-center gap-1.5 cursor-pointer font-bold ${claim.itemBClaimed ? 'text-emerald-700' : 'text-slate-400'}">
+                                <input type="checkbox" ${claim.itemBClaimed ? 'checked' : ''} onchange="adminToggleGift('${stu.studentId}', '${stu.name}', 'B', this.checked)" class="w-4 h-4 rounded">
+                                <span>${claim.itemBClaimed ? '已領取' : '未領取'}</span>
+                            </label>
+                        </td>
+                        <td class="px-3 py-2">
+                            <input type="text" value="${claim.itemBTime || ''}" onchange="adminUpdateGiftTime('${stu.studentId}', '${stu.name}', 'B', this.value)" placeholder="尚未領取" class="border rounded px-2 py-1 text-xs w-36 bg-slate-50">
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        };
+
+        function adminToggleGift(studentId, name, itemKey, isChecked) {
+            const nowInfo = getFormattedNow();
+            const claim = window.appState.giftClaims[studentId] || {
+                studentId, name, itemAClaimed: false, itemATime: "", itemBClaimed: false, itemBTime: ""
+            };
+            if (itemKey === 'A') {
+                claim.itemAClaimed = isChecked;
+                claim.itemATime = isChecked ? (claim.itemATime || nowInfo.fullStr) : "";
+            } else {
+                claim.itemBClaimed = isChecked;
+                claim.itemBTime = isChecked ? (claim.itemBTime || nowInfo.fullStr) : "";
+            }
+            window.appState.giftClaims[studentId] = claim;
+            window.renderAdminGiftRecords();
+            if (window.appState.currentStudent?.studentId === studentId) window.renderGiftStatusUI();
+            if (typeof window.syncGiftClaimToCloud === 'function') window.syncGiftClaimToCloud(studentId, claim);
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+            showToast(`✅ 已同步修正學號 ${studentId} 的禮物領取狀態！`, '🔄');
+        }
+
+        function adminUpdateGiftTime(studentId, name, itemKey, newTime) {
+            const claim = window.appState.giftClaims[studentId] || {
+                studentId, name, itemAClaimed: false, itemATime: "", itemBClaimed: false, itemBTime: ""
+            };
+            const val = newTime.trim();
+            if (itemKey === 'A') {
+                claim.itemATime = val;
+                claim.itemAClaimed = Boolean(val);
+            } else {
+                claim.itemBTime = val;
+                claim.itemBClaimed = Boolean(val);
+            }
+            window.appState.giftClaims[studentId] = claim;
+            window.renderAdminGiftRecords();
+            if (window.appState.currentStudent?.studentId === studentId) window.renderGiftStatusUI();
+            if (typeof window.syncGiftClaimToCloud === 'function') window.syncGiftClaimToCloud(studentId, claim);
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+            showToast(`✅ 已同步更新學號 ${studentId} 的領取時間點！`, '🕒');
+        }
+
+        // 後台分頁 3：5 位病人建檔 & 產生手圈 QR Code
+        function renderAdminPatients() {
+            const container = document.getElementById('admin-patients-list');
+            container.innerHTML = window.appState.patients.map((pt, idx) => `
+                <div class="border border-slate-200 rounded-xl p-3.5 bg-slate-50 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 flex-grow w-full">
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500">病人 ${idx + 1} 病歷號</label>
+                            <input type="text" id="pt-edit-id-${idx}" value="${pt.id}" class="w-full border rounded px-2.5 py-1.5 text-xs font-mono font-bold bg-white">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500">床號</label>
+                            <input type="text" id="pt-edit-bed-${idx}" value="${pt.bed}" class="w-full border rounded px-2.5 py-1.5 text-xs font-bold bg-white">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500">姓名</label>
+                            <input type="text" id="pt-edit-name-${idx}" value="${pt.name}" class="w-full border rounded px-2.5 py-1.5 text-xs font-bold bg-white">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500">性別</label>
+                            <input type="text" id="pt-edit-gender-${idx}" value="${pt.gender}" class="w-full border rounded px-2.5 py-1.5 text-xs bg-white">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500">年齡</label>
+                            <input type="number" id="pt-edit-age-${idx}" value="${pt.age}" class="w-full border rounded px-2.5 py-1.5 text-xs bg-white">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-500">住院日 / 醫師</label>
+                            <input type="text" id="pt-edit-doc-${idx}" value="${pt.doctor}" class="w-full border rounded px-2.5 py-1.5 text-xs bg-white">
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm shrink-0">
+                        <div id="pt-qrcode-box-${idx}" class="w-[100px] h-[100px] flex items-center justify-center"></div>
+                        <span class="text-[11px] font-mono text-slate-600 mt-1 font-bold">PT:${pt.id}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            // 產生對應 5 組 QR Code (使用精簡純英數病歷代碼 PT:病歷號，避免中文字元 UTF-8 位元長度溢位並大幅提升掃描辨識率)
+            setTimeout(() => {
+                window.appState.patients.forEach((pt, idx) => {
+                    const box = document.getElementById(`pt-qrcode-box-${idx}`);
+                    if (box && typeof QRCode !== 'undefined') {
+                        box.innerHTML = "";
+                        try {
+                            const qrPayload = `PT:${pt.id}`;
+                            new QRCode(box, {
+                                text: qrPayload,
+                                width: 96,
+                                height: 96,
+                                correctLevel: QRCode.CorrectLevel.L
+                            });
+                        } catch (err) {
+                            console.warn("QRCode 產生失敗:", err);
+                            box.innerHTML = `<span class="text-[10px] text-rose-600 font-bold">PT:${pt.id}</span>`;
+                        }
+                    }
+                });
+            }, 50);
+        }
+
+        function saveAllPatients() {
+            window.appState.patients = window.appState.patients.map((pt, idx) => ({
+                id: document.getElementById(`pt-edit-id-${idx}`).value.trim() || pt.id,
+                bed: document.getElementById(`pt-edit-bed-${idx}`).value.trim() || pt.bed,
+                name: document.getElementById(`pt-edit-name-${idx}`).value.trim() || pt.name,
+                gender: document.getElementById(`pt-edit-gender-${idx}`).value.trim() || pt.gender,
+                age: parseInt(document.getElementById(`pt-edit-age-${idx}`).value) || pt.age,
+                admDate: pt.admDate,
+                doctor: document.getElementById(`pt-edit-doc-${idx}`).value.trim() || pt.doctor
+            }));
+            renderAdminPatients();
+            renderQuickChipsAndPatients();
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+            showToast('✅ 已更新 5 位病人資料並重新產生手圈 QR Code！', '🏥');
+        }
+
+        // 後台分頁 4：首頁輪盤項目 & 機率修改
+        function renderAdminWheel() {
+            const container = document.getElementById('admin-wheel-list');
+            container.innerHTML = window.appState.wheelItems.map((it, idx) => `
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <input type="color" id="wheel-color-${idx}" value="${it.color}" class="w-9 h-9 rounded cursor-pointer border-0">
+                    <input type="text" id="wheel-label-${idx}" value="${it.label}" class="flex-grow border rounded-lg px-3 py-2 text-xs font-bold bg-white" placeholder="輪盤項目名稱">
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="wheel-prob-${idx}" oninput="updateWheelProbTotal()" value="${it.prob}" class="w-20 border rounded-lg px-2 py-2 text-xs font-bold text-right bg-white">
+                        <span class="text-xs font-bold">%</span>
+                    </div>
+                    <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                        <input type="checkbox" id="wheel-core-${idx}" ${it.isCore ? 'checked' : ''}> 核心掃碼
+                    </label>
+                    ${window.appState.wheelItems.length > 2 ? `<button onclick="removeWheelItem(${idx})" class="text-rose-600 font-bold text-xs px-2">刪除</button>` : ''}
+                </div>
+            `).join('');
+            updateWheelProbTotal();
+        }
+
+        function updateWheelProbTotal() {
+            let sum = 0;
+            window.appState.wheelItems.forEach((_, idx) => {
+                const el = document.getElementById(`wheel-prob-${idx}`);
+                if (el) sum += Number(el.value || 0);
+            });
+            const elTotal = document.getElementById('wheel-prob-total');
+            if (elTotal) {
+                elTotal.innerText = `${sum}%`;
+                elTotal.className = sum === 100 ? "font-bold text-emerald-700" : "font-bold text-rose-600";
+            }
+        }
+
+        function addWheelItem() {
+            window.appState.wheelItems.push({ label: "新任務項目", prob: 0, color: "#8b5cf6", isCore: false });
+            renderAdminWheel();
+        }
+
+        function removeWheelItem(idx) {
+            window.appState.wheelItems.splice(idx, 1);
+            renderAdminWheel();
+        }
+
+        function saveWheelSettings() {
+            window.appState.wheelItems = window.appState.wheelItems.map((it, idx) => ({
+                color: document.getElementById(`wheel-color-${idx}`).value,
+                label: document.getElementById(`wheel-label-${idx}`).value.trim() || it.label,
+                prob: Number(document.getElementById(`wheel-prob-${idx}`).value) || 0,
+                isCore: document.getElementById(`wheel-core-${idx}`).checked
+            }));
+            drawRouletteWheel();
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+            showToast('✅ 已套用最新輪盤名稱與機率！', '🎡');
+        }
+
+        // 後台分頁 5：Google Sheet Webhook 寫入
+        function saveGoogleSheetUrl() {
+            const url = document.getElementById('gsheet-webhook-url').value.trim();
+            window.appState.googleSheetUrl = url;
+            if (typeof window.syncConfigToCloud === 'function') window.syncConfigToCloud();
+            if (url) {
+                sendToGoogleSheet({ action: 'test_connection', note: '系統連線測試成功' });
+                showToast('✅ 已儲存 Google Sheet 網址並發送測試資料！', '🔗');
+            } else {
+                showToast('已清除 Google Sheet 網址', 'ℹ️');
+            }
+        }
+
+        function sendToGoogleSheet(payloadObj) {
+            const url = window.appState.googleSheetUrl;
+            if (!url) return;
+            fetch(url, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payloadObj)
+            }).catch(err => console.warn("Google Sheet 傳送提示:", err));
+        }
+
+        window.refreshAllUI = function() {
+            drawRouletteWheel();
+            renderQuickChipsAndPatients();
+            if (window.appState.currentStudent) window.renderGiftStatusUI();
+        };
+
+        // 網頁載入初始化
+        window.onload = function() {
+            startLiveClock();
+            drawRouletteWheel();
+            renderQuickChipsAndPatients();
+            updateSummaryPreview();
+        };
+    </script>
+</body>
+</html>
